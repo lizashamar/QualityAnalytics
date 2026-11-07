@@ -46,8 +46,15 @@ async function http(method, path, body) {
 // Бэкенд хранит статус апелляции как open|resolved|outdated; интерфейс называет открытую «pending».
 const normAppeal = (a) => (a && a.status === 'open' ? { ...a, status: 'pending' } : a);
 
+let activeGroup = config.GROUP_ID;
+
 const remote = {
-  getConversations: () => http('GET', `/conversations${qs({ group_id: config.GROUP_ID })}`),
+  async importDataset(groupId) {
+    const result = await http('POST', '/datasets/import', { group_id: groupId });
+    activeGroup = groupId;
+    return result;
+  },
+  getConversations: () => http('GET', `/conversations${qs({ group_id: activeGroup })}`),
   getConversation: (id) => http('GET', `/conversations/${enc(id)}`),
   getChecklists: () => http('GET', '/checklists'),
   saveChecklist: (cl) => http('POST', '/checklists', cl),
@@ -56,7 +63,7 @@ const remote = {
   getEvaluation: (query) => (typeof query === 'string'
     ? http('GET', `/evaluations/${enc(query)}`)
     : http('GET', `/evaluations/latest${qs(query)}`)),
-  listEvaluations: () => http('GET', `/evaluations${qs({ group_id: config.GROUP_ID, latest: 1 })}`),
+  listEvaluations: () => http('GET', `/evaluations${qs({ group_id: activeGroup, latest: 1 })}`),
   createAppeal: (data) => http('POST', '/appeals', data).then(normAppeal),
   listAppeals: () => http('GET', '/appeals').then((list) => list.map(normAppeal)),
   resolveAppeal: (appealId, data) => http('POST', `/appeals/${enc(appealId)}/resolve`, data).then(normAppeal),

@@ -63,7 +63,7 @@ class Settings:
         return replace(self, **kw)
 
 
-DEFAULT_MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-4o-mini", "mock": "mock-heuristic-v1"}
+DEFAULT_MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-6-luna", "mock": "mock-heuristic-v1"}
 
 
 def load_settings() -> Settings:

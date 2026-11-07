@@ -18,6 +18,14 @@ export function round2(x) {
   return Math.round((x + Number.EPSILON) * 100) / 100;
 }
 
+export function normalizeCriterion(criterion) {
+  const kind = criterion.evaluation_type;
+  if (!['binary', 'scale_10', 'scale_20'].includes(kind)) return criterion;
+  if (kind === 'binary') return { ...criterion, type: 'yesno', scale_steps: [] };
+  const maximum = kind === 'scale_10' ? 10 : 20;
+  return { ...criterion, type: 'scale', scale_steps: Array.from({ length: maximum + 1 }, (_, i) => maximum - i) };
+}
+
 function maxStep(criterion) {
   const steps = (criterion.scale_steps || []).map(Number).filter(Number.isFinite);
   return steps.length ? Math.max(...steps) : 0;
@@ -25,6 +33,7 @@ function maxStep(criterion) {
 
 /** Допустимые значения ответа для критерия (порядок: от лучшего к худшему, затем na). */
 export function allowedAnswers(criterion) {
+  criterion = normalizeCriterion(criterion);
   let base;
   if (criterion.type === 'scale') {
     base = [...(criterion.scale_steps || [])].map(Number).sort((a, b) => b - a);
@@ -36,6 +45,7 @@ export function allowedAnswers(criterion) {
 
 export function validAnswer(criterion, answer) {
   if (!criterion) return false;
+  criterion = normalizeCriterion(criterion);
   if (answer === 'na') return !!criterion.allow_na;
   if (criterion.type === 'scale') {
     if (typeof answer !== 'number' || !Number.isFinite(answer)) return false;
@@ -54,6 +64,7 @@ function fraction(criterion, answer) {
 }
 
 export function calculate(criteria, answers) {
+  criteria = criteria.map(normalizeCriterion);
   answers = answers || {};
   const rows = criteria.map((c) => {
     const has = Object.prototype.hasOwnProperty.call(answers, c.id);
@@ -86,7 +97,7 @@ export function calculate(criteria, answers) {
   }
 
   const gross_flag = rows.some((r) => r.is_flag && !r.error && r.answer === 'yes');
-  const total = W === 0 ? null : round2(rows.reduce((s, r) => s + r.points, 0));
+  const total = W === 0 ? null : Math.min(100, Math.max(0, round2(rows.reduce((s, r) => s + r.points, 0))));
 
   const sections = [];
   for (const r of rows) {
@@ -110,6 +121,7 @@ export function calculate(criteria, answers) {
 
 /** Проверка чек-листа перед сохранением. Возвращает массив текстов ошибок (пустой — всё ок). */
 export function validateChecklist(criteria) {
+  criteria = criteria.map(normalizeCriterion);
   const errors = [];
   if (!criteria.length) errors.push('Добавьте хотя бы один критерий.');
   const sum = criteria.filter((c) => !c.is_flag).reduce((s, c) => s + (Number(c.weight) || 0), 0);
@@ -117,6 +129,9 @@ export function validateChecklist(criteria) {
   const ids = new Set();
   criteria.forEach((c, i) => {
     const n = `Критерий ${i + 1}`;
+    if (c.evaluation_type != null && !['binary', 'scale_10', 'scale_20'].includes(c.evaluation_type)) errors.push(`${n}: неизвестный evaluation_type.`);
+    if (typeof c.weight !== 'number' || !Number.isFinite(c.weight) || c.weight < 0) errors.push(`${n}: вес должен быть конечным неотрицательным числом.`);
+    if (!String(c.id || '').trim()) errors.push(`${n}: нет id.`);
     if (ids.has(c.id)) errors.push(`${n}: повторяющийся id «${c.id}».`);
     ids.add(c.id);
     if (!String(c.title || '').trim()) errors.push(`${n}: нет названия.`);

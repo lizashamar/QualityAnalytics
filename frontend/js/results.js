@@ -81,7 +81,7 @@ export function scoreTone(v) {
   if (v === null || v === undefined) return 'ne';
   return v >= 80 ? 'ok' : v >= 60 ? 'wn' : 'rd';
 }
-export const fmtScore = (v) => (v === null || v === undefined ? '—' : String(round2(v)));
+export const fmtScore = (v) => (v === null || v === undefined ? '—' : round2(v).toFixed(2));
 export const fmtPts = (v) => (Math.round(v * 100) / 100).toFixed(2);
 
 export function scoreBadge(v) {

@@ -14,6 +14,15 @@ export function newDraft(base) {
   return { family_id: base.family_id, based_on: base.id, name: base.name, description: base.description || '', criteria: clone(base.criteria), activate: true, baseVersion: base.version };
 }
 
+export function scaleMode(c) {
+  if (c._scaleMode) return c._scaleMode;
+  if (c.type !== 'scale') return 'yesno';
+  for (const maximum of [10, 20]) {
+    if (c.scale_steps?.length === maximum + 1 && Array.from({length:maximum + 1}, (_, i) => i).every((i) => c.scale_steps.includes(i))) return `scale_${maximum}`;
+  }
+  return 'scale';
+}
+
 // ---------- список ----------
 export function listView(s) {
   const fams = [];
@@ -101,6 +110,7 @@ export function criterionModalView(s, m) {
   const steps = c.scale_steps.length ? c.scale_steps : [];
   return html`<form data-submit="criterion" novalidate aria-labelledby="cm-h" id="cm-form">
     <h3 id="cm-h">${m.index < 0 ? 'Новый критерий' : 'Изменить критерий'}</h3>
+    <label for="cm-id">ID критерия</label><input id="cm-id" value="${c.id}" required>
     <label for="cm-title">Название</label><input id="cm-title" value="${c.title}" required>
     <label for="cm-section">Секция</label><input id="cm-section" list="cm-sections" value="${c.section}" required>
     <datalist id="cm-sections">${sections.map((x) => html`<option value="${x}"></option>`)}</datalist>
@@ -110,10 +120,13 @@ export function criterionModalView(s, m) {
       <div><label for="cm-type">Тип ответа</label>
         <select id="cm-type" data-change="cm-rerender" ${attr('disabled', c.is_flag)}>
           <option value="yesno" ${attr('selected', c.type === 'yesno')}>Да / Нет</option>
-          <option value="scale" ${attr('selected', c.type === 'scale')}>Шкала (ступени)</option></select></div>
+          <option value="scale" ${attr('selected', scaleMode(c) === 'scale')}>Шкала (свои ступени)</option>
+          <option value="scale_10" ${attr('selected', scaleMode(c) === 'scale_10')}>Шкала 0–10</option>
+          <option value="scale_20" ${attr('selected', scaleMode(c) === 'scale_20')}>Шкала 0–20</option></select></div>
       <div><label for="cm-weight">Вес</label><input id="cm-weight" type="number" min="0" step="any" value="${c.is_flag ? 0 : c.weight}" ${attr('disabled', c.is_flag)}></div>
     </div>
-    ${c.type === 'scale' && !c.is_flag ? html`<fieldset><legend>Ступени шкалы и описания (верхняя ступень = полный вес)</legend>
+    ${c.type === 'scale' && !c.is_flag && scaleMode(c) !== 'scale' ? html`<p class="mu small">Все целые значения от 0 до ${scaleMode(c) === 'scale_10' ? 10 : 20}. Для своих ступеней и описаний выберите «Шкала (свои ступени)».</p>` : ''}
+    ${c.type === 'scale' && !c.is_flag && scaleMode(c) === 'scale' ? html`<fieldset><legend>Ступени шкалы и описания (верхняя ступень = полный вес)</legend>
       ${steps.map((st, i) => html`<div class="row step">
         <label class="sr" for="cm-step-${i}">Ступень ${i + 1}</label><input id="cm-step-${i}" class="num" type="number" min="0" step="any" value="${st}" data-step="${i}">
         <label class="sr" for="cm-label-${i}">Описание ступени ${i + 1}</label><input id="cm-label-${i}" class="grow" value="${(c.scale_labels || {})[st] || ''}" placeholder="Описание ступени">
@@ -130,15 +143,21 @@ export function criterionModalView(s, m) {
 function readCriterionForm(base) {
   const $ = (id) => document.getElementById(id);
   const c = { ...base };
+  c.id = $('cm-id').value.trim();
   c.title = $('cm-title').value.trim();
   c.section = $('cm-section').value.trim();
   c.question = $('cm-question').value.trim();
   c.is_flag = $('cm-flag').checked;
-  c.type = c.is_flag ? 'yesno' : $('cm-type').value;
+  const selectedType = c.is_flag ? 'yesno' : $('cm-type').value;
+  c._scaleMode = selectedType;
+  c.type = selectedType.startsWith('scale_') ? 'scale' : selectedType;
   c.weight = c.is_flag ? 0 : Number($('cm-weight').value) || 0;
   c.allow_na = $('cm-na').checked;
   c.na_condition = $('cm-nacond') ? $('cm-nacond').value.trim() : base.na_condition || '';
-  if (c.type === 'scale') {
+  if (selectedType.startsWith('scale_')) {
+    const maximum = Number(selectedType.split('_')[1]);
+    c.scale_steps = Array.from({length:maximum + 1}, (_, i) => maximum - i);
+  } else if (c.type === 'scale') {
     const steps = [];
     const labels = {};
     document.querySelectorAll('#cm-form [data-step]').forEach((inp) => {
@@ -265,6 +284,7 @@ export const handlers = {
         c.scale_steps = [];
         c.scale_labels = {};
       }
+      delete c._scaleMode;
       if (!c.allow_na) c.na_condition = '';
       const errs = validateChecklist([c]).filter((e) => !e.startsWith('Сумма весов'));
       if (errs.length) {

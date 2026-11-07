@@ -83,7 +83,7 @@ export function reviewView(s) {
       <h2>Апелляция ${ap.id} <span class="b ${tone(ap.status)}">${STATUS[ap.status]}</span></h2>
       <p class="sub">Диалог <a href="#/conversations/${encodeURIComponent(conv.conversation_id)}">${conv.conversation_id}</a> · ${conv.language} · создана ${fmtDate(ap.created_at)}</p>
     </div></div>
-    ${latest && latest.id !== ev.id ? html`<p class="b wn block">Диалог переоценён после подачи апелляции (новая оценка ${latest.id}). Решение применится к оценке ${ev.id}.</p>` : ''}
+    ${latest && latest.id !== ev.id ? html`<p class="b wn block">Диалог переоценён после подачи апелляции (новая оценка ${latest.id}). Открытые апелляции по старой оценке больше не принимаются.</p>` : ''}
     <div class="split">
       <div class="col">
         <section class="card" aria-labelledby="orig-h">
@@ -110,7 +110,7 @@ export function reviewView(s) {
           <textarea id="rv-reason" rows="3" required data-input="review-reason" aria-describedby="rv-err" ${attr('aria-invalid', !!r.error)}>${r.reason}</textarea>
           <p id="rv-err" class="err" role="alert">${r.error || ''}</p>
           ${preview ? html`<p class="preview" aria-live="polite">Итог после решения: <b>${fmtScore(R.final.total)}</b> → <b>${fmtScore(preview.total)}</b>${preview.gross_flag ? ' · грубое нарушение' : ''}</p>` : ''}
-          <div class="row end"><a class="btn" href="#/appeals">Отмена</a><button type="submit" class="p">Подтвердить решение</button></div>
+          <div class="row end"><a class="btn" href="#/appeals">Отмена</a><button type="submit" class="p" ${attr('disabled', !!r.busy)}>Подтвердить решение</button></div>
         </form>` : !ap.resolution ? html`<section class="card"><h3>Апелляция устарела</h3>
           <p class="mu">Диалог был переоценён, исходная оценка больше не действует. Если спор остался, оспорьте новую оценку в карточке диалога.</p></section>`
         : html`<section class="card"><h3>Решение проверяющего</h3>
@@ -183,12 +183,14 @@ export const handlers = {
     async appeal(form) {
       const s = store.get();
       const m = s.modal;
+      if (m.busy) return;
       const comment = form.querySelector('#ap-comment').value.trim();
       const crit = form.querySelector('#ap-crit').value;
       if (!comment) { store.set({ modal: { ...m, criterionId: crit, comment, error: 'Напишите комментарий — без него апелляцию не принять.' } }); return; }
       const ev = s.evaluations[m.evaluationId];
       const item = ev.items.find((i) => i.criterion_id === crit);
       try {
+        store.set({ modal: { ...m, busy: true } });
         const ap = await createAppeal({ evaluation_item_id: item.id, comment });
         store.set({ modal: null });
         toast(`Апелляция ${ap.id} отправлена`, 'ok');
@@ -197,6 +199,7 @@ export const handlers = {
     async review(form) {
       const s = store.get();
       const id = s.route.params.id;
+      if (s.review?.busy) return;
       const ap = s.appeals.find((a) => a.id === id);
       const checked = form.querySelector('input[name="answer"]:checked');
       const reason = form.querySelector('#rv-reason').value.trim();
@@ -209,11 +212,15 @@ export const handlers = {
       const ev = s.evaluations[ap.evaluation_id];
       const before = finalResult(s, ev).final.total;
       try {
+        store.set({ review: { appealId: id, answer, reason, busy: true } });
         await resolveAppeal(id, { new_answer: answer, reason });
         const after = finalResult(store.get(), ev).final.total;
         store.set({ review: null });
         toast(`Решение сохранено. Итог: ${fmtScore(before)} → ${fmtScore(after)}`, 'ok');
-      } catch (e) { fail(e); }
+      } catch (e) {
+        store.set({ review: { appealId: id, answer, reason, busy: false } });
+        fail(e);
+      }
     },
   },
 };

@@ -47,6 +47,21 @@ def _sections(calc: dict) -> list[dict]:
     return [{k: s[k] for k in ("section", "points", "max", "percent", "gross_flag")} for s in calc["sections"]]
 
 
+def criterion_result_fields(item: dict) -> dict:
+    """Expose specification names alongside the established UI contract."""
+    answer = item.get("answer")
+    if answer == "na":
+        status, score = "na", None
+    elif isinstance(answer, (int, float)) and not isinstance(answer, bool):
+        status, score = "scale", answer
+    elif answer in ("yes", "no"):
+        status, score = ("passed", 1) if answer == "yes" else ("failed", 0)
+    else:
+        status, score = "invalid", None
+    return {"status": status, "raw_score": score, "rationale": item.get("explanation", ""),
+            "na_justification": item.get("na_reason")}
+
+
 def evaluation_out(ev: dict) -> dict:
     criteria, items = ev["criteria"], ev["items"]
     orig = calculate(criteria, answers_of(items, final=False))
@@ -66,7 +81,7 @@ def evaluation_out(ev: dict) -> dict:
         "sections": _sections(orig),
         "final_total": fin["total"],
         "final_gross_flag": fin["gross_flag"],
-        "items": [{"id": f"{key}:{i['criterion_id']}", **i, "points": round2(rows[i["criterion_id"]]["points"]) if i["criterion_id"] in rows else 0}
+        "items": [{"id": f"{key}:{i['criterion_id']}", **i, **criterion_result_fields(i), "points": round2(rows[i["criterion_id"]]["points"]) if i["criterion_id"] in rows else 0}
                   for i in items],
         "criteria": criteria,
         "usage": ev["usage"],
@@ -194,6 +209,9 @@ def resolve_appeal(db: Database, key: str, new_answer, reason: str) -> dict:
 
 # ---------- импорт ----------
 def import_dataset(db: Database, settings: Settings, group_id: str) -> dict:
+    group_id = group_id.strip()
+    if not group_id:
+        raise ApiError(400, "group_id не может быть пустым")
     data = organizers.fetch_dataset(settings.organizer_api_url, group_id)
     n = db.upsert_conversations(data["records"], group_id)
     return {"group_id": group_id, "imported": n, "total": data["total_records"], "skipped": data["skipped"]}

@@ -1,6 +1,8 @@
 // Единственное глобальное состояние приложения + подписки.
 
 const initial = {
+  datasetGroup: '',
+  importing: false,
   ready: false,
   error: null,
   route: { name: 'conversations', params: {} },
@@ -11,6 +13,9 @@ const initial = {
   appeals: [],
   filters: { q: '', language: '', channel: '', status: '' },
   appealFilter: 'pending',
+  selectedConversations: [],
+  batchChecklistId: null,
+  batchSummary: null,
   cardChecklistId: null, // выбранный на карточке чек-лист для запуска оценки
   running: {}, // conversation_id -> true, пока идёт оценка
   highlight: { indices: [], range: null },

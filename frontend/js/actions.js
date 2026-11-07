@@ -53,6 +53,7 @@ export async function runEvaluation(conversationId, checklistId) {
   try {
     const ev = await api.runEvaluation(conversationId, clId);
     putEvaluation(ev);
+    store.set({ appeals: await api.listAppeals() });
     return ev;
   } finally {
     store.set((st) => { const r = { ...st.running }; delete r[conversationId]; return { running: r }; });
@@ -60,6 +61,8 @@ export async function runEvaluation(conversationId, checklistId) {
 }
 
 export async function evaluateMany(ids, checklistId) {
+  if (store.get().applying) throw new Error("Массовая оценка уже выполняется");
+  ids = [...new Set(ids)];
   store.set({ applying: { done: 0, total: ids.length } });
   let ok = 0;
   try {
@@ -81,6 +84,8 @@ export async function createAppeal(data) {
 
 export async function resolveAppeal(id, data) {
   const ap = await api.resolveAppeal(id, data);
+  const ev = await api.getEvaluation(ap.evaluation_id);
+  putEvaluation(ev, { asLatest: store.get().latest[ev.conversation_id] === ev.id });
   store.set((s) => ({ appeals: s.appeals.map((a) => (a.id === id ? ap : a)) }));
   return ap;
 }

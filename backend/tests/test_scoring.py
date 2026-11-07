@@ -60,3 +60,31 @@ def test_allowed_answers():
 
 def test_bool_is_not_number():
     assert valid_answer(BY["c6"], True) is False
+
+
+@pytest.mark.parametrize('case', CASES['explicit_scales'], ids=lambda c: c['name'])
+def test_explicit_scale_cases(case):
+    result = calculate(case['criteria'], case['answers'])
+    assert result['total'] == case['total']
+    assert result['gross_flag'] is case['gross_flag']
+    active = [row for row in result['rows'] if row['applicable']]
+    if active:
+        assert sum(row['effective_weight'] for row in active) == pytest.approx(100)
+    assert validate_checklist(case['criteria']) == []
+
+
+@pytest.mark.parametrize('maximum', [10, 20])
+def test_all_explicit_scale_values(maximum):
+    criterion = {'id': 's', 'evaluation_type': f'scale_{maximum}', 'weight': 100}
+    assert allowed_answers(criterion) == list(range(maximum, -1, -1))
+    for score in range(maximum + 1):
+        assert valid_answer(criterion, score)
+        assert calculate([criterion], {'s': score})['total'] == round2(score / maximum * 100)
+    for invalid in [-1, maximum + 1, True, float('inf'), float('nan'), '5']:
+        assert not valid_answer(criterion, invalid)
+
+
+@pytest.mark.parametrize('weight', [-1, float('inf'), float('nan')])
+def test_invalid_weight_rejected(weight):
+    criterion = {'id': 's', 'title': 'Score', 'section': 'Quality', 'evaluation_type': 'scale_10', 'weight': weight}
+    assert validate_checklist([criterion])

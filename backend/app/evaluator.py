@@ -248,6 +248,9 @@ def evaluate(llm: LLMClient, conv: dict, criteria: list[dict], *, price_in: floa
         final_items.append(chosen)
 
     usage["cost_usd"] = _cost(usage, price_in, price_out)
+    log.info("evaluation_usage conv=%s model=%s calls=%d tokens_in=%d tokens_out=%d cost_usd=%s",
+             conv.get("conversation_id"), llm.model, usage["calls"], usage["input_tokens"],
+             usage["output_tokens"], usage["cost_usd"])
     usage["model"] = llm.model
     usage["provider"] = llm.provider
     return {"items": final_items, "usage": usage, "warnings": warnings, "model": f"{llm.provider}:{llm.model}"}

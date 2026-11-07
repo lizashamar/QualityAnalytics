@@ -106,4 +106,28 @@ if (existsSync(fixtures)) {
   }
 }
 
-console.log(`\n${passed} passed`);
+
+
+const explicitCases = JSON.parse(readFileSync(new URL('../../backend/tests/fixtures/scoring_cases.json', import.meta.url), 'utf8')).explicit_scales;
+for (const c of explicitCases) {
+  test(`explicit: ${c.name}`, () => {
+    const result = calculate(c.criteria, c.answers);
+    assert.equal(result.total, c.total);
+    assert.equal(result.gross_flag, c.gross_flag);
+    assert.deepEqual(validateChecklist(c.criteria), []);
+    const active = result.rows.filter((r) => r.applicable);
+    if (active.length) assert.ok(Math.abs(active.reduce((sum, r) => sum + r.effective_weight, 0) - 100) < 1e-9);
+  });
+}
+for (const maximum of [10, 20]) {
+  test(`full integer scale 0..${maximum}`, () => {
+    const c = { id: 's', evaluation_type: `scale_${maximum}`, weight: 100 };
+    assert.equal(allowedAnswers(c).length, maximum + 1);
+    for (let score = 0; score <= maximum; score++) {
+      assert.equal(validAnswer(c, score), true);
+      assert.equal(calculate([c], { s: score }).total, Math.round((score / maximum * 100 + Number.EPSILON) * 100) / 100);
+    }
+    for (const value of [-1, maximum + 1, true, Infinity, NaN, '5']) assert.equal(validAnswer(c, value), false);
+  });
+}
+console.log(`\n${passed} total checks passed`);

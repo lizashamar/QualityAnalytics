@@ -202,5 +202,124 @@ curl 'http://localhost:8000/api/dialogues'
 Tests: `.venv/bin/python -m pytest backend/tests -q`.
 Live organizer verification requires a configured URL; automated tests use a 65-dialogue fixture.
 
-Checkpoint progress: Checkpoint 1 implemented with automated ingestion tests; live DEV verification
-pending organizer URL. Checkpoints 2–6 have not been audited against the new specification.
+Checkpoint progress: Checkpoint 1 verified against the live DEV batch: 65 records, none skipped.
+Checkpoint 2 uses strict structured outputs and has automated client tests. A live
+`gpt-6-luna` evaluation succeeded: 8 criteria, no validation warnings, one call,
+2,914 input tokens and 1,111 output tokens; estimated cost $0.000847 using configured rates.
+Checkpoints 3–6 are implemented with automated scoring, API and UI component/handler checks.
+Browser layout/playback QA remains manual; the secret control group is tested with fixtures only.
+
+## Checkpoint 2: strict OpenAI evaluations
+
+Set these values in `backend/.env` (never commit the actual key):
+
+```dotenv
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-6-luna
+LLM_API_KEY=your_key
+LLM_BASE_URL=https://api.openai.com/v1
+PRICE_IN_PER_MTOK=0.10
+PRICE_OUT_PER_MTOK=0.50
+```
+
+The client sends `response_format.type=json_schema` with `strict=true` and
+`max_completion_tokens`; it never silently falls back to unstructured output.
+The schema preserves the current application contract (`answer`, `explanation`,
+`evidence`, `na_reason`). Semantic validation additionally checks criterion IDs,
+allowed answers, N/A conditions and evidence. Explanations use the dialogue language.
+Refusals and truncated output preserve token usage for the evaluator's bounded retry.
+Usage and the estimated USD cost are stored with each successful evaluation and logged
+without transcript text or API credentials. Rates above are specification assumptions.
+
+Request format reference: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+Other OpenAI-compatible servers must support this schema format and completion token parameter.
+
+## Checkpoint 3: scoring scales
+
+Checklist criteria submitted to `POST /api/checklists` can specify
+`evaluation_type: "binary"`, `"scale_10"`, or `"scale_20"`. Binary criteria use
+`yes`/`no`; explicit scales accept every integer from zero through 10 or 20.
+For example, 6/10 with a 30-point weight earns 18 points before N/A redistribution.
+The API normalizes these names into the existing `type` / `scale_steps` representation,
+so prompts, reviewer choices, the checklist editor and stored evaluations remain compatible.
+Existing custom step scales and historical checklist versions are preserved.
+
+N/A removes the criterion from the applicable weight sum; remaining weights are multiplied
+by `100 / applicable_weight`. Missing or invalid answers earn zero and retain their weight.
+Gross violations are independent flags and do not subtract points. The final total is
+rounded once to two decimals and bounded to 0–100. If every scored criterion is N/A,
+the result is `null` (unscorable), rather than awarding a score without applicable criteria.
+Negative and nonfinite weights are rejected when saving a checklist.
+
+Validation: 78 backend tests and 41 frontend scoring checks pass, including shared
+cross-language fixtures and an API save-and-evaluate test for both explicit scales.
+
+## Checkpoints 4–6: result UI, appeals and control readiness
+
+- The scorecard shows model, input/output tokens and estimated USD cost to six decimal places.
+  The total score displays two decimals. Actual cost depends on the configured rates and usage.
+- Evidence chips scroll to and highlight the message and, when audio is present, seek to its
+  timestamp. MM:SS values are direct audio offsets; ISO timestamps are relative to the first
+  parseable timestamp. Quotes are escaped before display. Playback remains user-controlled.
+- Reviewer forms show the operator comment, original rationale and a live total preview.
+  Confirmation requires a note. Scores and appeal states refresh from the server after review
+  and reevaluation. Duplicate submissions are disabled while a request is pending.
+- The criterion editor supports IDs, definitions, weights, binary answers, complete 0–10/0–20
+  integer scales, custom steps, N/A conditions and violation flags. Saving creates a version;
+  existing evaluations are preserved. Specification-style API fields `description` and
+  `evaluation_type` are normalized to `question`, `type`, and `scale_steps` for storage.
+- Evaluation items also expose `status`, `raw_score`, `rationale`, and `na_justification` aliases.
+  Evidence indices refer to exact transcript messages; `evidence_quotes` holds cited text.
+
+### T+23h control-batch runbook
+
+1. Confirm the backend is running and `/api/health` reports the configured OpenAI model.
+2. Open **Диалоги**, enter the released group ID under **Группа датасета**, then select
+   **Загрузить группу**. Check the imported, reported and skipped counts in the notification.
+   Group IDs are sent as data and query-encoded; the backend URL does not need a code change.
+3. In **Чек-листы**, edit or swap the requested criteria. Keep scored weights at 100;
+   save and activate the new version. The editor reports invalid weights and duplicate IDs.
+4. Select **Применить к диалогам**, choose the control dialogues and run the evaluations.
+   Import itself does not start paid evaluations. Review warnings, evidence and per-evaluation costs.
+5. Open a result, submit an appeal, then use **Апелляции** to confirm or override it with a note.
+   Check the preview, original score, saved reviewer decision and updated final score.
+
+API alternative for a background batch (replace CONTROL with the released ID):
+
+```sh
+curl -X POST http://localhost:8000/api/datasets/import \
+  -H 'Content-Type: application/json' -d '{"group_id":"CONTROL"}'
+curl 'http://localhost:8000/api/conversations?group_id=CONTROL'
+# Pass the returned conversation_id values and your checklist ID:
+curl -X POST http://localhost:8000/api/evaluations/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"conversation_ids":["CONTROL_DIALOGUE_ID"],"checklist_id":"CHECKLIST_ID"}'
+# GET /api/jobs/JOB_ID returns progress, errors and accumulated estimated cost.
+```
+
+The UI accepts `?api=...&group=...&mock=0` or Dynamics web resource `?data=` parameters.
+Keep API keys exclusively on the backend. For a Dynamics deployment on a different origin,
+configure that exact trusted origin in backend CORS before embedding; localhost origins are
+currently allowed for development. Signed audio URLs must remain valid for playback.
+
+Additional checks:
+
+```sh
+node frontend/test/results.test.js
+node frontend/test/workflows.test.js
+```
+
+Browser-based visual QA and real playback remain manual checks because no browser connection
+was available. Component/handler checks cover navigation, timestamps, escaping, cost display,
+review previews, full-scale editor submission, group propagation and state refresh.
+
+### Batch evaluation from the dialogue list
+
+The **Диалоги** page provides individual checkboxes, a header checkbox that selects the
+currently shown rows, and a checklist selector. **Оценить выбранные** evaluates the selected
+IDs, including selections hidden by a later filter. **Оценить все** evaluates every dialogue
+in the loaded group regardless of filters. Evaluation creates a new result for already-scored
+conversations. Controls are disabled while a batch runs; progress and success/error counts are
+shown. Requests run sequentially and continue after individual failures.
+
+Batch UI checks: `node frontend/test/batch.test.js` (uses simulated API responses, no paid calls).

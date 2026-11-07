@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import httpx
 
-from .base import LLMClient, LLMError
+from .base import LLMClient, LLMError, LLMParseError
+from .schema import EVALUATION_SCHEMA
 
 
 class OpenAICompatClient(LLMClient):
@@ -15,7 +16,6 @@ class OpenAICompatClient(LLMClient):
         self.api_key = api_key
         self.max_tokens = max_tokens
         self.timeout = timeout
-        self.json_mode = True  # выключается сам, если сервер не поддерживает response_format
 
     def _post(self, body: dict) -> httpx.Response:
         headers = {"Content-Type": "application/json"}
@@ -30,26 +30,32 @@ class OpenAICompatClient(LLMClient):
         body = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "temperature": 0,
-            "max_tokens": self.max_tokens,
+            "max_completion_tokens": self.max_tokens,
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "conversation_evaluation", "strict": True, "schema": EVALUATION_SCHEMA,
+            }},
         }
-        if self.json_mode:
-            body["response_format"] = {"type": "json_object"}
         r = self._post(body)
-        if r.status_code == 400 and self.json_mode and "response_format" in r.text:
-            self.json_mode = False
-            body.pop("response_format", None)
-            r = self._post(body)
         if r.status_code in (401, 403):
             raise LLMError("Модель: неверный или недостаточный API-ключ")
         if r.status_code == 429:
             raise LLMError("Модель: превышен лимит запросов, повторите позже")
         if r.status_code >= 400:
             raise LLMError(f"Модель: HTTP {r.status_code}")
-        data = r.json()
         try:
-            text = data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError):
+            data = r.json()
+            choice = data["choices"][0]
+            message = choice["message"]
+            u = data.get("usage") or {}
+            usage = {"input_tokens": u.get("prompt_tokens", 0) or 0,
+                     "output_tokens": u.get("completion_tokens", 0) or 0}
+            if message.get("refusal"):
+                raise LLMParseError("Модель отказалась оценивать диалог", "", usage)
+            text = message.get("content") or ""
+            if choice.get("finish_reason") != "stop":
+                raise LLMParseError("Модель не завершила JSON-ответ", text, usage)
+            if not isinstance(text, str):
+                raise TypeError
+        except (ValueError, KeyError, IndexError, TypeError):
             raise LLMError("Модель вернула ответ неожиданного формата") from None
-        u = data.get("usage") or {}
-        return text, {"input_tokens": u.get("prompt_tokens", 0) or 0, "output_tokens": u.get("completion_tokens", 0) or 0}
+        return text, usage

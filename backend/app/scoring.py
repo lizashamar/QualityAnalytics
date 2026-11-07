@@ -32,6 +32,23 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and v == v and v not in (float("inf"), float("-inf"))
 
 
+def normalize_criterion(c: dict) -> dict:
+    """Adapt specification scale names to the existing checklist contract.
+
+    Explicit scales contain every integer score. Legacy custom steps remain unchanged.
+    """
+    kind = c.get("evaluation_type")
+    if kind not in ("binary", "scale_10", "scale_20"):
+        return c
+    result = {**c}
+    if kind == "binary":
+        result.update(type="yesno", scale_steps=[])
+    else:
+        maximum = 10 if kind == "scale_10" else 20
+        result.update(type="scale", scale_steps=list(range(maximum, -1, -1)))
+    return result
+
+
 def _steps(c: dict) -> list[float]:
     return [float(s) for s in (c.get("scale_steps") or []) if _is_number(s)]
 
@@ -42,6 +59,7 @@ def _max_step(c: dict) -> float:
 
 
 def allowed_answers(c: dict) -> list:
+    c = normalize_criterion(c)
     if c.get("type") == "scale":
         base = sorted((c.get("scale_steps") or []), key=lambda x: -float(x))
     else:
@@ -52,6 +70,7 @@ def allowed_answers(c: dict) -> list:
 def valid_answer(c: dict | None, answer: Answer) -> bool:
     if not c:
         return False
+    c = normalize_criterion(c)
     if answer == "na" and isinstance(answer, str):
         return bool(c.get("allow_na"))
     if c.get("type") == "scale":
@@ -69,6 +88,7 @@ def _fraction(c: dict, answer: Answer) -> float:
 
 
 def calculate(criteria: list[dict], answers: dict | None) -> dict:
+    criteria = [normalize_criterion(c) for c in criteria]
     answers = answers or {}
     rows = []
     for c in criteria:
@@ -101,7 +121,7 @@ def calculate(criteria: list[dict], answers: dict | None) -> dict:
         r["points"] = r["fraction"] * r["effective_weight"]
 
     gross_flag = any(r["is_flag"] and not r["error"] and r["answer"] == "yes" for r in rows)
-    total = None if W == 0 else round2(sum(r["points"] for r in rows))
+    total = None if W == 0 else min(100.0, max(0.0, round2(sum(r["points"] for r in rows))))
 
     sections: list[dict] = []
     for r in rows:
@@ -124,16 +144,26 @@ def calculate(criteria: list[dict], answers: dict | None) -> dict:
 
 def validate_checklist(criteria: list[dict]) -> list[str]:
     """Тексты ошибок (пусто — ок). Совпадает с validateChecklist в JS."""
+    criteria = [normalize_criterion(c) for c in criteria]
     errors: list[str] = []
     if not criteria:
         errors.append("Добавьте хотя бы один критерий.")
     total = sum(float(c.get("weight") or 0) for c in criteria if not c.get("is_flag"))
-    if abs(total - 100) > 1e-9:
+    if not math.isfinite(total):
+        errors.append("Сумма весов должна быть конечным числом.")
+    elif abs(total - 100) > 1e-9:
         t = round2(total)
         errors.append(f"Сумма весов критериев с баллами должна быть 100 (сейчас {int(t) if t == int(t) else t}).")
     ids: set = set()
     for i, c in enumerate(criteria):
         n = f"Критерий {i + 1}"
+        if c.get("evaluation_type") not in (None, "binary", "scale_10", "scale_20"):
+            errors.append(f"{n}: неизвестный evaluation_type.")
+        weight = c.get("weight", 0)
+        if not _is_number(weight) or weight < 0:
+            errors.append(f"{n}: вес должен быть конечным неотрицательным числом.")
+        if not str(c.get("id") or "").strip():
+            errors.append(f"{n}: нет id.")
         if c.get("id") in ids:
             errors.append(f"{n}: повторяющийся id «{c.get('id')}».")
         ids.add(c.get("id"))

@@ -205,3 +205,18 @@ dialog h3 { font-size: 16px; }
   .msg { max-width: 100%; }
   .layers .lbl { min-width: 0; width: 100%; }
 }
+
+.dataset-import { margin-bottom: 16px; }
+.dataset-import input { width: 160px; }
+.evaluation-cost { overflow-wrap: anywhere; }
+.crit blockquote { margin: 6px 0; }
+@media (max-width: 480px) {
+  main { padding: 12px; }
+  .dataset-import input { width: 100%; }
+  .ed-item > div:first-child { min-width: 0; }
+}
+
+.batch-controls { margin: 12px 0; }
+.batch-controls select { width: auto; max-width: 100%; }
+.batch-controls progress { width: 100%; accent-color: var(--ac); }
+td > input[type="checkbox"], th > input[type="checkbox"] { width: auto; cursor: pointer; }

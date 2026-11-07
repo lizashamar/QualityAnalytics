@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from . import services
 from .dataset import read_dataset, save_dataset
@@ -24,7 +24,7 @@ from .db import Database
 from .jobs import JobManager
 from .llm import LLMClient, LLMError, make_client
 from .organizers import OrganizerError
-from .scoring import validate_checklist
+from .scoring import normalize_criterion, validate_checklist
 from .services import ApiError
 
 log = logging.getLogger("cqa")
@@ -39,12 +39,32 @@ class UTF8JSONResponse(JSONResponse):
 
 # ---------- модели запросов ----------
 class CriterionIn(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_scale(cls, data):
+        if not isinstance(data, dict):
+            return data
+        data = {**data}
+        if "description" in data and "question" not in data:
+            data["question"] = data["description"]
+        if "evaluation_type" not in data:
+            return data
+        data.setdefault("section", "Качество")
+        if data.get("allow_na"):
+            data.setdefault("na_condition", "Критерий неприменим к обстоятельствам диалога; объясните причину.")
+        if data["evaluation_type"] not in ("binary", "scale_10", "scale_20"):
+            raise ValueError("evaluation_type: binary | scale_10 | scale_20")
+        normalized = normalize_criterion(data)
+        # Persist the established contract so the editor and historical snapshots stay compatible.
+        normalized.pop("evaluation_type", None)
+        return normalized
+
     id: str = Field(min_length=1)
     section: str = ""
     title: str = ""
     question: str = ""
     type: Literal["yesno", "scale"] = "yesno"
-    weight: Number = 0
+    weight: Number = Field(default=0, ge=0, allow_inf_nan=False)
     allow_na: bool = False
     na_condition: str = ""
     scale_steps: list[Number] = []
@@ -86,7 +106,7 @@ class ResolveIn(BaseModel):
 
 
 class ImportIn(BaseModel):
-    group_id: str = Field(min_length=1)
+    group_id: str = Field(min_length=1, max_length=128)
 
 
 FIELD_RU = {"missing": "обязательное поле", "string_too_short": "не может быть пустым", "literal_error": "недопустимое значение"}

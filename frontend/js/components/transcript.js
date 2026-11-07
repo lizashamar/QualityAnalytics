@@ -18,10 +18,14 @@ export function parseTs(ts) {
 export function offsets(transcript) {
   const abs = transcript.map((r) => parseTs(r.timestamp));
   const base = abs.find((x) => x !== null);
-  return abs.map((x) => (x === null || base === undefined ? null : Math.max(0, x - base)));
+  return abs.map((x, i) => {
+    if (x === null || base === undefined) return null;
+    // MM:SS is already an audio offset; only absolute clock timestamps need a baseline.
+    return /^\d{1,2}(:\d{1,2}){1,2}$/.test(String(transcript[i].timestamp).trim()) ? x : Math.max(0, x - base);
+  });
 }
 
-const fmtOffset = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+export const fmtOffset = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 /**
  * @param conv record
@@ -70,24 +74,34 @@ export function focusReplicas(indices, range = null) {
   }
 }
 
+export function seekReplica(index) {
+  const s = store.get();
+  const conv = s.conversations.find((c) => c.conversation_id === s.route.params.id);
+  const audio = document.getElementById('call-audio');
+  if (!conv || !audio) return;
+  const off = offsets(conv.transcript)[index];
+  if (off == null || !Number.isFinite(off)) return;
+  const seek = () => {
+    try { audio.currentTime = Number.isFinite(audio.duration) ? Math.min(off, audio.duration) : off; }
+    catch { /* Metadata may not be ready; loadedmetadata will retry. */ }
+  };
+  seek();
+  if (audio.readyState === 0) audio.addEventListener('loadedmetadata', seek, { once: true });
+}
+
 export const handlers = {
   click: {
     seek(el) {
       const i = Number(el.dataset.index);
-      const s = store.get();
-      const conv = s.conversations.find((c) => c.conversation_id === s.route.params.id);
-      const audio = document.getElementById('call-audio');
-      if (!conv || !audio) return;
-      const off = offsets(conv.transcript)[i];
-      if (off === null) return;
-      audio.currentTime = off;
-      audio.play().catch(() => { /* автоплей может быть запрещён — позиция всё равно выставлена */ });
+      seekReplica(i);
       focusReplicas([i]);
     },
     jump(el) {
       const indices = (el.dataset.indices || '').split(',').filter((x) => x !== '').map(Number);
       const range = el.dataset.from !== undefined ? [Number(el.dataset.from), Number(el.dataset.to)] : null;
       focusReplicas(indices, range);
+      const first = indices.length ? Math.min(...indices) : range?.[0];
+      if (first !== undefined) seekReplica(first);
     },
   },
 };

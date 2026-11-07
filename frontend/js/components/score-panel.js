@@ -2,23 +2,26 @@
 // проверяющего пересчитывается через scoring.js. Критерии — из версии чек-листа оценки.
 
 import { html } from '../html.js';
+import { offsets, fmtOffset } from './transcript.js';
 import {
   finalResult, criterionOf, answerBadge, answerText, scoreTone, fmtScore, fmtPts,
   checklistLabel, activeChecklist, fmtDate, replicaNo,
 } from '../results.js';
 
-function evidenceLinks(item) {
+function evidenceLinks(item, conv) {
+  const times = offsets(conv.transcript || []);
   const ev = item.evidence || [];
   const parts = [];
   if (ev.length) {
-    parts.push(html`<span class="mu">Доказательства:</span> ${ev.map((i) => html`<button type="button" class="chip" data-action="jump" data-indices="${i}" aria-label="Показать реплику ${replicaNo(i)}">реплика ${replicaNo(i)}</button>`)}
+    parts.push(html`<span class="mu">Доказательства:</span> ${ev.map((i) => html`<button type="button" class="chip" data-action="jump" data-indices="${i}" aria-label="Показать реплику ${replicaNo(i)}">реплика ${replicaNo(i)}${conv.audio_url && times[i] != null ? ` · ${fmtOffset(times[i])}` : ''}</button>`)}
       ${ev.length > 1 ? html`<button type="button" class="chip" data-action="jump" data-indices="${ev.join(',')}">все</button>` : ''}`);
   }
   if (item.checked_range) {
     const [a, b] = item.checked_range;
     parts.push(html`<button type="button" class="chip range" data-action="jump" data-indices="" data-from="${a}" data-to="${b}">Проверенный участок: реплики ${replicaNo(a)}–${replicaNo(b)}</button>`);
   }
-  return parts.length ? html`<div class="row evid">${parts}</div>` : '';
+  const quotes = (item.evidence_quotes || []).map((q) => html`<blockquote class="small">#${replicaNo(q.index)} · ${(conv.transcript || [])[q.index]?.speaker || ''}: «${q.quote}»</blockquote>`);
+  return parts.length ? html`<div class="row evid">${parts}</div>${quotes}` : '';
 }
 
 function weightInfo(c, origRow) {
@@ -34,7 +37,7 @@ function pointsText(c, row) {
   return html`<span class="pts"><b>${fmtPts(row.points)}</b><span class="mu"> / ${fmtPts(row.effective_weight)}</span></span>`;
 }
 
-function itemView(item, c, R) {
+function itemView(item, c, R, conv) {
   const cid = item.criterion_id;
   const origRow = R.originalCalc.rows.find((r) => r.criterion_id === cid);
   const finRow = R.final.rows.find((r) => r.criterion_id === cid);
@@ -49,7 +52,7 @@ function itemView(item, c, R) {
     ${c && c.question ? html`<p class="q">${c.question}</p>` : ''}
     <p class="expl">${item.explanation}</p>
     ${item.answer === 'na' ? html`<p class="na"><b>Почему N/A:</b> ${item.na_reason || '—'}</p>` : ''}
-    ${evidenceLinks(item)}
+    ${evidenceLinks(item, conv)}
     ${dec ? html`<ol class="layers" aria-label="История оценки по критерию">
       <li><span class="lbl">Исходная оценка</span>${answerBadge(c, item.answer)} ${pointsText(c, origPtsRow)}</li>
       <li><span class="lbl">Решение проверяющего</span>${answerBadge(c, dec.resolution.new_answer)}
@@ -123,12 +126,17 @@ export function scorePanelView(s, conv, ev) {
         · оценка ${ev.id} от ${fmtDate(ev.created_at)}<br>
         ${naCount ? `N/A: ${naCount} — исключены; веса применимых критериев (сумма ${W}) пересчитаны до 100.` : 'Все критерии применимы.'}
       </p>
+      ${ev.usage ? html`<p class="mu small evaluation-cost">Модель: ${ev.usage.model || ev.model} ·
+        Токены: ${ev.usage.input_tokens ?? 0} вход / ${ev.usage.output_tokens ?? 0} выход ·
+        Примерная стоимость: <b>${typeof ev.usage.cost_usd === 'number' ? `$${ev.usage.cost_usd.toFixed(6)}` : 'не задана'}</b>
+        ${ev.usage.provider === 'mock' ? ' · демо-оценка' : ''}</p>` : ''}
+      ${(ev.warnings || []).length ? html`<div class="b wn block" role="alert">Проверьте результат: ${ev.warnings.join(' ')}</div>` : ''}
       ${missing ? html`<p class="b rd">Версия чек-листа ${ev.checklist_id} не найдена — пересчёт недоступен.</p>` : ''}
     </section>
     <section class="card" aria-labelledby="sec-h"><h3 id="sec-h">Баллы по секциям</h3>${sectionsView(R.original.sections || [], R.final.sections, R.changed)}</section>
     <section class="card" aria-labelledby="crit-h">
       <div class="row sp"><h3 id="crit-h">Критерии</h3>
         <button type="button" data-action="appeal-open" data-criterion="">Оспорить оценку…</button></div>
-      ${groups.map((g) => html`<h4 class="group">${g.section}</h4>${g.items.map(([i, c]) => itemView(i, c, R))}`)}
+      ${groups.map((g) => html`<h4 class="group">${g.section}</h4>${g.items.map(([i, c]) => itemView(i, c, R, conv))}`)}
     </section>`;
 }

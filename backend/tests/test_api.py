@@ -199,3 +199,53 @@ def test_cors_localhost(client):
     assert r.headers.get("access-control-allow-origin") == "http://localhost:5500"
     r = client.options("/api/conversations", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"})
     assert "access-control-allow-origin" not in r.headers
+
+
+def test_explicit_scales_persist_and_score(client):
+    client.post('/api/datasets/import', json={'group_id': 'DEV'})
+    criteria = [
+        {'id': 's10', 'title': 'Quality', 'section': 'Quality', 'weight': 40,
+         'evaluation_type': 'scale_10', 'question': 'Rate the quality'},
+        {'id': 's20', 'title': 'Resolution', 'section': 'Quality', 'weight': 60,
+         'evaluation_type': 'scale_20', 'question': 'Rate the resolution'},
+    ]
+    response = client.post('/api/checklists', json={'name': 'Full scales', 'criteria': criteria})
+    assert response.status_code == 200, response.text
+    checklist = response.json()
+    assert checklist['criteria'][0]['type'] == 'scale'
+    assert checklist['criteria'][0]['scale_steps'] == list(range(10, -1, -1))
+    assert checklist['criteria'][1]['scale_steps'] == list(range(20, -1, -1))
+    result = client.post('/api/evaluations', json={
+        'conversation_id': 'dev-ru-1', 'checklist_id': checklist['id']})
+    assert result.status_code == 200, result.text
+    assert 0 <= result.json()['total'] <= 100
+    for item in result.json()['items']:
+        maximum = 10 if item['criterion_id'] == 's10' else 20
+        assert item['answer'] in range(maximum + 1)
+    criteria[0]['evaluation_type'] = 'scale_100'
+    assert client.post('/api/checklists', json={'name': 'Invalid', 'criteria': criteria}).status_code == 400
+    criteria[0]['evaluation_type'] = 'scale_10'
+    criteria[0]['weight'] = -1
+    assert client.post('/api/checklists', json={'name': 'Invalid', 'criteria': criteria}).status_code == 400
+
+
+def test_control_group_and_specification_fields(client):
+    assert client.post('/api/datasets/import', json={'group_id': '   '}).status_code == 400
+    response = client.post('/api/datasets/import', json={'group_id': 'CONTROL-23H'})
+    assert response.status_code == 200
+    assert 'group_id=CONTROL-23H' in client.calls[-1]
+    assert len(client.get('/api/conversations?group_id=CONTROL-23H').json()) == 3
+    assert client.get('/api/conversations?group_id=DEV').json() == []
+    criteria = [{'id': 'resolution', 'title': 'Resolution', 'description': 'Rate resolution',
+                 'weight': 100, 'evaluation_type': 'scale_20', 'allow_na': True}]
+    saved = client.post('/api/checklists', json={'name': 'Control checklist', 'criteria': criteria})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()['criteria'][0]['question'] == 'Rate resolution'
+    evaluated = client.post('/api/evaluations', json={'conversation_id': 'dev-ru-1', 'checklist_id': saved.json()['id']})
+    assert evaluated.status_code == 200
+    item = evaluated.json()['items'][0]
+    assert item['status'] in ('scale', 'na')
+    assert item['rationale'] == item['explanation']
+    assert 'raw_score' in item and 'na_justification' in item
+    criteria[0]['id'] = ' '
+    assert client.post('/api/checklists', json={'name': 'Invalid', 'criteria': criteria}).status_code == 400
