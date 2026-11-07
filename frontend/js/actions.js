@@ -32,8 +32,33 @@ export async function loadAll() {
     const latest = {};
     for (const e of evals) { evaluations[e.id] = e; latest[e.conversation_id] = e.id; }
     store.set({ conversations, checklists, evaluations, latest, appeals, ready: true, error: null });
+    loadHistory();
   } catch (e) {
     store.set({ ready: true, error: e.message || String(e) });
+  }
+}
+
+/** История оценок по версиям чек-листа и средняя цена оценки. Ошибка не мешает основному экрану. */
+export async function loadHistory() {
+  try {
+    const [history, cost] = await Promise.all([
+      api.listEvaluationHistory ? api.listEvaluationHistory() : [],
+      api.getEvaluationCost ? api.getEvaluationCost().catch(() => null) : null,
+    ]);
+    store.set({ history: history || [], avgCost: cost ? cost.average_cost_usd : null });
+  } catch { store.set({ history: [] }); }
+}
+
+/** Сравнение двух версий чек-листа: s.compare = {from, to, loading, error, data}. */
+export async function loadCompare(from, to) {
+  store.set((s) => ({ compare: { ...(s.compare || {}), from, to, loading: true, error: null, data: null } }));
+  try {
+    const data = await api.compareChecklists(from, to);
+    const cur = store.get().compare;
+    if (cur && cur.from === from && cur.to === to) store.set({ compare: { ...cur, loading: false, data } });
+  } catch (e) {
+    const cur = store.get().compare;
+    if (cur && cur.from === from && cur.to === to) store.set({ compare: { ...cur, loading: false, error: e.message || String(e) } });
   }
 }
 
@@ -54,6 +79,7 @@ export async function runEvaluation(conversationId, checklistId) {
     const ev = await api.runEvaluation(conversationId, clId);
     putEvaluation(ev);
     store.set({ appeals: await api.listAppeals() });
+    if (!store.get().applying) loadHistory(); // при массовой оценке — один раз в конце
     return ev;
   } finally {
     store.set((st) => { const r = { ...st.running }; delete r[conversationId]; return { running: r }; });
@@ -72,6 +98,7 @@ export async function evaluateMany(ids, checklistId) {
     }
   } finally {
     store.set({ applying: null });
+    loadHistory();
   }
   return ok;
 }

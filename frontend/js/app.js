@@ -14,10 +14,12 @@ import * as card from './components/conversation-card.js';
 import * as transcript from './components/transcript.js';
 import * as appeals from './components/appeals.js';
 import * as editor from './components/checklist-editor.js';
+import * as compareView from './components/compare-view.js';
+import { loadCompare } from './actions.js';
 
 // ---------- обработчики ----------
 const H = { click: {}, input: {}, change: {}, submit: {} };
-for (const m of [overview, list, card, transcript, appeals, editor]) {
+for (const m of [overview, list, card, transcript, appeals, editor, compareView]) {
   for (const k of Object.keys(H)) Object.assign(H[k], (m.handlers && m.handlers[k]) || {});
 }
 H.click['modal-close'] = () => store.set({ modal: null });
@@ -59,6 +61,7 @@ function parse(hash) {
   if (p[0] === 'conversations' && p[1]) return { name: 'conversation', params: { id: p[1] } };
   if (p[0] === 'appeals' && p[1]) return { name: 'review', params: { id: p[1] } };
   if (p[0] === 'appeals') return { name: 'appeals', params: {} };
+  if (p[0] === 'checklists' && p[1] === 'compare' && p[2] && p[3]) return { name: 'compare', params: { from: p[2], to: p[3] } };
   if (p[0] === 'checklists' && p[1] && p[2] === 'edit') return { name: 'editor', params: { id: p[1] } };
   if (p[0] === 'checklists') return { name: 'checklists', params: {} };
   return { name: 'conversations', params: {} };
@@ -79,6 +82,10 @@ function onRoute() {
     if (ap && (!s.review || s.review.appealId !== ap.id)) patch.review = { appealId: ap.id, answer: ap.original_answer, reason: '' };
     if (ap) ensureEvaluation(ap.evaluation_id);
   }
+  if (route.name === 'compare' && s.ready) {
+    const c = s.compare;
+    if (!c || c.from !== route.params.from || c.to !== route.params.to || (!c.loading && !c.data && !c.error)) loadCompare(route.params.from, route.params.to);
+  }
   if (route.name === 'editor' && s.ready) {
     const id = route.params.id;
     const want = id === 'new' ? null : id;
@@ -98,7 +105,7 @@ const NAV = [
   ['checklists', '#/checklists', 'Чек-лист', 'doc'],
   ['overview', '#/overview', 'Обзор', 'sparkle'],
 ];
-const NAV_OF = { conversation: 'conversations', review: 'appeals', editor: 'checklists' };
+const NAV_OF = { conversation: 'conversations', review: 'appeals', editor: 'checklists', compare: 'checklists' };
 const THEME_LABEL = { auto: 'Тема: как в системе', light: 'Тема: светлая', dark: 'Тема: тёмная' };
 const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
 
@@ -132,6 +139,7 @@ function mainView(s) {
     case 'review': return appeals.reviewView(s);
     case 'checklists': return editor.listView(s);
     case 'editor': return editor.editorView(s);
+    case 'compare': return compareView.view(s);
     default: return list.view(s);
   }
 }
@@ -140,6 +148,7 @@ function modalView(s, m) {
   if (m.type === 'appeal') return appeals.appealModalView(s, m);
   if (m.type === 'criterion') return editor.criterionModalView(s, m);
   if (m.type === 'apply') return editor.applyModalView(s, m);
+  if (m.type === 'compare-pick') return compareView.pickModalView(s, m);
   return html``;
 }
 

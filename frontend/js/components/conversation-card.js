@@ -3,7 +3,7 @@
 import { html, attr } from '../html.js';
 import { icon } from '../icons.js';
 import { store } from '../store.js';
-import { LANG, CHANNEL, latestEvaluation, activeChecklist, checklistLabel } from '../results.js';
+import { LANG, CHANNEL, latestEvaluation, activeChecklist, checklistLabel, versionTrail, trailView } from '../results.js';
 import { transcriptView } from './transcript.js';
 import { scorePanelView } from './score-panel.js';
 import { emptyState, skeleton } from './ui.js';
@@ -32,6 +32,7 @@ export function view(s) {
           <span class="b ne">${LANG[conv.language] || conv.language} · ${conv.language}</span>
           <span class="b ne">${icon(isCall ? 'phone' : 'chat')}<span>${CHANNEL[conv.channel] || conv.channel}</span></span>
           <span class="b ne">${conv.transcript.length} реплик</span>
+          ${(() => { const t = versionTrail(s, id); return t ? html`${trailView(t)}<a class="small" href="#/checklists/compare/${encodeURIComponent(t.from.checklist_id)}/${encodeURIComponent(t.to.checklist_id)}">сравнить версии</a>` : ''; })()}
         </div>
       </div>
       <div class="run" role="group" aria-label="Запуск оценки">

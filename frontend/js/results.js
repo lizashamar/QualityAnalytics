@@ -113,5 +113,24 @@ export function fmtDate(iso) {
   return Number.isNaN(d.getTime()) ? String(iso || '') : d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+/** Оценки диалога по разным версиям чек-листа (из s.history): последние две версии, по возрастанию.
+ *  Возвращает null, если версия одна. Итог — с учётом решения проверяющего, если оно есть. */
+export function versionTrail(s, convId) {
+  const list = (s.history || []).filter((h) => h.conversation_id === convId)
+    .sort((a, b) => a.checklist_version - b.checklist_version || String(a.created_at).localeCompare(String(b.created_at)));
+  if (list.length < 2) return null;
+  const pick = list.slice(-2).map((h) => ({ version: h.checklist_version, checklist_id: h.checklist_id, total: h.final_total ?? h.total }));
+  const [a, b] = pick;
+  return { from: a, to: b, delta: a.total != null && b.total != null ? round2(b.total - a.total) : null };
+}
+
+export function trailView(t) {
+  if (!t) return '';
+  const tone = t.delta == null || Math.abs(t.delta) < 0.005 ? 'ne' : t.delta > 0 ? 'ok' : 'rd';
+  const ic = tone === 'ok' ? 'up' : tone === 'rd' ? 'down' : 'minus';
+  return html`<span class="ver-trail d-${tone}" title="Итог по версиям чек-листа">v${t.from.version}: <b>${fmtScore(t.from.total)}</b> ${icon('arrowRight')} v${t.to.version}: <b>${fmtScore(t.to.total)}</b>
+    ${t.delta != null ? html`<span class="ver-delta">${icon(ic)}${t.delta > 0 ? '+' : ''}${fmtPts(t.delta)}</span>` : ''}</span>`;
+}
+
 /** Номер реплики для людей: индекс в transcript + 1. */
 export const replicaNo = (i) => i + 1;

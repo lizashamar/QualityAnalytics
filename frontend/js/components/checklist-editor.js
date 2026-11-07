@@ -35,6 +35,7 @@ export function listView(s) {
   fams.forEach((f) => f.versions.sort((a, b) => b.version - a.version));
   const act = activeChecklist(s);
   return html`
+    ${reevalPanel(s)}
     <div class="page-head"><div><h2>Чек-листы</h2>
       <p class="sub">Оценка запускается активной версией. Сохранение изменений создаёт новую версию — старые оценки остаются привязаны к своей.</p></div>
       <div class="row">
@@ -47,11 +48,62 @@ export function listView(s) {
         <td><b>v${v.version}</b></td><td>${v.criteria.length}</td><td>${fmtDate(v.created_at)}</td>
         <td>${v.active ? html`<span class="b ok">${icon('check')}<span>Активная</span></span>` : html`<span class="hint">—</span>`}</td>
         <td class="row end">
+          ${s.checklists.length > 1 ? html`<button type="button" class="btn-sm" data-action="compare-open" data-id="${v.id}" aria-label="Сравнить версию ${v.version} с другой">${icon('scale')}Сравнить с…</button>` : ''}
           ${v.active ? '' : html`<button type="button" data-action="cl-activate" data-id="${v.id}">Сделать активной</button>`}
           <a class="btn" href="#/checklists/${encodeURIComponent(v.id)}/edit">Изменить (новая версия)</a>
         </td></tr>`)}
       </tbody></table></div>
     </section>`)}`;
+}
+
+// ---------- переоценка после сохранения новой версии ----------
+function avgCost(s) {
+  if (typeof s.avgCost === 'number') return s.avgCost;
+  const xs = Object.values(s.evaluations || {}).map((e) => e.usage?.cost_usd).filter((x) => typeof x === 'number');
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+}
+
+export function reevalIds(s, o) {
+  if (o.mode === 'selected') return (s.selectedConversations || []).filter((id) => s.conversations.some((c) => c.conversation_id === id));
+  if (o.mode === 'first') return s.conversations.slice(0, Math.max(0, Number(o.n) || 0)).map((c) => c.conversation_id);
+  // все ранее оценённые по прежней версии (по истории; если её нет — по последним оценкам)
+  const fromHistory = new Set((s.history || []).filter((h) => h.checklist_id === o.baseId).map((h) => h.conversation_id));
+  const fromLatest = s.conversations.filter((c) => s.evaluations[s.latest[c.conversation_id]]?.checklist_id === o.baseId).map((c) => c.conversation_id);
+  return s.conversations.map((c) => c.conversation_id).filter((id) => fromHistory.has(id) || fromLatest.includes(id));
+}
+
+function reevalPanel(s) {
+  const o = s.reevalOffer;
+  if (!o) return '';
+  const ids = reevalIds(s, o);
+  const avg = avgCost(s);
+  const busy = !!s.applying;
+  const done = o.done;
+  const radio = (mode, label, count, extra = '') => html`<label class="opt"><input type="radio" name="reeval-mode" value="${mode}" data-change="reeval-mode" ${attr('checked', o.mode === mode)} ${attr('disabled', busy)}>
+    <span>${label}</span><span class="hint">${count} диал.</span>${extra}</label>`;
+  return html`<section class="notice ok reeval" role="region" aria-labelledby="reeval-h">
+    ${icon('check')}
+    <div class="grow">
+      <h3 id="reeval-h">Версия v${o.version} сохранена. Переоценить диалоги?</h3>
+      ${done ? html`<p>Переоценено ${done.ok} из ${done.total}.${done.cost != null ? ` Стоимость ≈ $${done.cost.toFixed(4)}.` : ''}</p>
+        <div class="row">${o.baseId ? html`<a class="btn p" href="#/checklists/compare/${encodeURIComponent(o.baseId)}/${encodeURIComponent(o.id)}">${icon('scale')}Сравнить v${o.baseVersion} → v${o.version}</a>` : ''}
+          <button type="button" data-action="reeval-dismiss">Закрыть</button></div>`
+      : html`<fieldset ${attr('disabled', busy)}><legend class="sr">Какие диалоги переоценить</legend>
+          ${o.baseId ? radio('previous', `Все ранее оценённые по v${o.baseVersion}`, reevalIds(s, { ...o, mode: 'previous' }).length) : ''}
+          ${radio('selected', 'Выбранные в списке диалогов', reevalIds(s, { ...o, mode: 'selected' }).length)}
+          ${radio('first', 'Первые N', reevalIds(s, { ...o, mode: 'first' }).length,
+            html`<label class="sr" for="reeval-n">N</label><input id="reeval-n" type="number" min="1" max="${s.conversations.length}" value="${o.n}" data-input="reeval-n" class="num">`)}
+        </fieldset>
+        <p class="hint">Будет оценено <b>${ids.length}</b> диал. чек-листом v${o.version}.
+          ${avg != null ? html`Ориентировочная стоимость: <b>$${(avg * ids.length).toFixed(4)}</b> (средняя цена прошлой оценки $${avg.toFixed(4)}).` : 'Стоимость неизвестна: цены модели не заданы.'}</p>
+        ${busy ? html`<p role="status">Оценено ${s.applying.done} из ${s.applying.total}…</p>
+          <progress max="${s.applying.total}" value="${s.applying.done}" aria-label="Прогресс переоценки"></progress>` : ''}
+        <div class="row">
+          <button type="button" class="p" data-action="reeval-run" ${attr('disabled', busy || !ids.length)}>${icon('refresh')}Переоценить (${ids.length})</button>
+          <button type="button" class="ghost" data-action="reeval-dismiss" ${attr('disabled', busy)}>Не сейчас</button>
+        </div>`}
+    </div>
+  </section>`;
 }
 
 // ---------- редактор ----------
@@ -199,9 +251,11 @@ export function applyModalView(s, m) {
 
 export const handlers = {
   input: {
+    'reeval-n'(el) { const o = store.get().reevalOffer; if (o) store.set({ reevalOffer: { ...o, n: Math.max(1, Math.min(9999, Number(el.value) || 1)), mode: 'first' } }); },
     'draft-field'(el) { store.get().draft[el.dataset.key] = el.value; }, // без перерисовки
   },
   change: {
+    'reeval-mode'(el) { const o = store.get().reevalOffer; if (o) store.set({ reevalOffer: { ...o, mode: el.value } }); },
     'draft-activate'(el) { store.get().draft.activate = el.checked; },
     'cm-rerender'() { rerender(); },
     'apply-all'(el) {
@@ -216,6 +270,22 @@ export const handlers = {
     },
   },
   click: {
+    'reeval-dismiss'() { if (!store.get().applying) store.set({ reevalOffer: null }); },
+    async 'reeval-run'() {
+      const s = store.get();
+      const o = s.reevalOffer;
+      if (!o || s.applying) return;
+      const ids = reevalIds(s, o);
+      if (!ids.length) return;
+      const before = new Set(Object.keys(s.evaluations));
+      try {
+        const ok = await evaluateMany(ids, o.id);
+        const fresh = Object.values(store.get().evaluations).filter((e) => !before.has(e.id) && e.checklist_id === o.id);
+        const costs = fresh.map((e) => e.usage?.cost_usd).filter((x) => typeof x === 'number');
+        store.set((st) => ({ reevalOffer: st.reevalOffer && { ...st.reevalOffer, done: { ok, total: ids.length, cost: costs.length ? costs.reduce((a, b) => a + b, 0) : null } } }));
+        toast(`Переоценено ${ok} из ${ids.length} по v${o.version}`, ok === ids.length ? 'ok' : 'rd');
+      } catch (e) { fail(e); }
+    },
     async 'cl-activate'(el) {
       try { await activateChecklist(el.dataset.id); toast('Версия сделана активной', 'ok'); } catch (e) { fail(e); }
     },
@@ -265,9 +335,11 @@ export const handlers = {
       store.set({ draft: { ...d, busy: true } });
       try {
         const saved = await saveChecklist(d, d.activate);
-        store.set({ draft: null });
+        const hasPrev = d.based_on && store.get().checklists.some((c) => c.id === d.based_on);
+        store.set({ draft: null, reevalOffer: { id: saved.id, version: saved.version, baseId: hasPrev ? d.based_on : null,
+          baseVersion: d.baseVersion, mode: hasPrev ? 'previous' : 'first', n: 5, done: null } });
         location.hash = '#/checklists';
-        toast(`Сохранена версия v${saved.version}${d.activate ? ' и сделана активной' : ''}. Нажмите «Применить к диалогам», чтобы переоценить.`, 'ok');
+        toast(`Сохранена версия v${saved.version}${d.activate ? ' и сделана активной' : ''}`, 'ok');
       } catch (e) {
         store.set({ draft: { ...store.get().draft, busy: false } });
         fail(e);
