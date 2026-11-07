@@ -1,5 +1,3 @@
-// Операции, которые ходят в API и обновляют store. Компоненты вызывают только их.
-
 import { api } from './api.js';
 import { store } from './store.js';
 import { activeChecklist } from './results.js';
@@ -71,8 +69,40 @@ export async function ensureEvaluation(id) {
   try { putEvaluation(await api.getEvaluation(id), { asLatest: false }); } catch (e) { fail(e); }
 }
 
-export async function runEvaluation(conversationId, checklistId) {
+const reviewRequests = new Map();
+/** Appeals span dataset groups. Load their evidence without changing the loaded dataset. */
+export async function ensureReviewContext(appealId) {
+  if (reviewRequests.has(appealId)) return reviewRequests.get(appealId);
+  const appeal = store.get().appeals.find((a) => a.id === appealId);
+  if (!appeal) return;
+  const request = (async () => {
+    store.set((s) => ({ reviewLoads: { ...s.reviewLoads, [appealId]: { status: 'loading' } } }));
+    try {
+      const s = store.get();
+      const [evaluation, conversation] = await Promise.all([
+        s.evaluations[appeal.evaluation_id] || api.getEvaluation(appeal.evaluation_id),
+        s.conversations.find((c) => c.conversation_id === appeal.conversation_id)
+          || s.reviewConversations?.[appeal.conversation_id] || api.getConversation(appeal.conversation_id),
+      ]);
+      if (!evaluation || !conversation) throw new Error('Оценка или диалог больше недоступны.');
+      store.set((current) => ({
+        evaluations: { ...current.evaluations, [evaluation.id]: evaluation },
+        reviewConversations: { ...current.reviewConversations, [conversation.conversation_id]: conversation },
+        reviewLoads: { ...current.reviewLoads, [appealId]: { status: 'ready' } },
+      }));
+    } catch (e) {
+      store.set((s) => ({ reviewLoads: { ...s.reviewLoads, [appealId]: {
+        status: 'error', error: e.message || String(e),
+      } } }));
+    }
+  })();
+  reviewRequests.set(appealId, request);
+  try { await request; } finally { reviewRequests.delete(appealId); }
+}
+
+export async function runEvaluation(conversationId, checklistId, { batch = false } = {}) {
   const s = store.get();
+  if(s.running[conversationId] || s.applying&&!batch) throw new Error('Дождитесь завершения текущей оценки.');
   const clId = checklistId || (activeChecklist(s) || {}).id;
   store.set((st) => ({ running: { ...st.running, [conversationId]: true } }));
   try {
@@ -93,7 +123,7 @@ export async function evaluateMany(ids, checklistId) {
   let ok = 0;
   try {
     for (const id of ids) {
-      try { await runEvaluation(id, checklistId); ok++; } catch (e) { fail(e); }
+      try { await runEvaluation(id, checklistId, {batch:true}); ok++; } catch (e) { fail(e); }
       store.set((s) => ({ applying: { done: s.applying.done + 1, total: ids.length } }));
     }
   } finally {
@@ -114,6 +144,7 @@ export async function resolveAppeal(id, data) {
   const ev = await api.getEvaluation(ap.evaluation_id);
   putEvaluation(ev, { asLatest: store.get().latest[ev.conversation_id] === ev.id });
   store.set((s) => ({ appeals: s.appeals.map((a) => (a.id === id ? ap : a)) }));
+  loadHistory();
   return ap;
 }
 
@@ -138,6 +169,6 @@ export async function activateChecklist(id) {
 
 export async function resetDemo() {
   await api.resetMock();
-  store.set({ draft: null, review: null, modal: null, highlight: { indices: [], range: null } });
+  store.set({ draft: null, review: null, reviewConversations: {}, reviewLoads: {}, modal: null, highlight: { indices: [], range: null } });
   await loadAll();
 }

@@ -63,7 +63,7 @@ function rowView(r, u, d) {
   const t = dTone(r.delta);
   const details = [...r.changed_criteria.map((c) => ({ ...c, kind: 'answer' })), ...r.points_changed.map((c) => ({ ...c, kind: 'points' }))];
   return html`<tr class="cmp-row d-${t}${open ? ' open' : ''}">
-    <td><button type="button" class="cmp-toggle" data-action="cmp-expand" data-id="${r.conversation_id}" aria-expanded="${open}" aria-controls="cmp-d-${r.conversation_id}"
+    <td><button type="button" class="cmp-toggle" data-action="cmp-expand" data-id="${r.conversation_id}" aria-expanded="${String(open)}" ${open ? html`aria-controls="cmp-d-${r.conversation_id}"` : ''}
       aria-label="Критерии диалога ${r.conversation_id}" ${attr('disabled', !details.length)}>${icon(open ? 'down' : 'arrowRight')}</button></td>
     <td><a href="#/conversations/${encodeURIComponent(r.conversation_id)}" class="mono-id">${r.conversation_id}</a></td>
     <td class="num t-${scoreTone(r.total_from)}">${fmtScore(r.total_from)}${r.final_total_from != null ? html`<span class="hint final" title="После решения проверяющего"> · ${fmtScore(r.final_total_from)}</span>` : ''}</td>

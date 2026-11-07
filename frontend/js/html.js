@@ -25,5 +25,4 @@ export function html(strings, ...values) {
 /** Только для строк-констант из кода (SVG-иконки). Никогда не передавайте сюда данные пользователя. */
 export const trustedConstant = (s) => new SafeHtml(String(s));
 
-/** Атрибут-флаг: html`<button ${attr('disabled', cond)}>` */
 export const attr = (name, on) => new SafeHtml(on ? ` ${name}` : '');

@@ -57,7 +57,6 @@ class MockClient(LLMClient):
         out = json.dumps({"items": items}, ensure_ascii=False)
         return out, {"input_tokens": (len(system) + len(user)) // 4, "output_tokens": len(out) // 4}
 
-    # ---- эвристики ----
     def _judge(self, c: dict, tr: list[dict]) -> dict:
         ops = [r for r in tr if r["speaker"] == "operator"]
         clients = [r for r in tr if r["speaker"] == "client"]

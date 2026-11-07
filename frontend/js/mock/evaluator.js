@@ -1,10 +1,8 @@
-// Детерминированный «оценщик» для mock-режима. Имитирует ответ бэкенда (evaluation).
-// Для критериев seed-чек-листа есть заготовленные ответы по каждому демо-диалогу.
-// Если критерий новый или его название изменили — ответ генерируется правдоподобно и
-// детерминированно по диалогу, чтобы новый критерий сразу отрисовался в интерфейсе.
+// Deterministic demo scoring; modified criteria use synthetic fallback answers.
 
 import { calculate, validAnswer, round2 } from '../scoring.js';
 import { SEED_CRITERIA } from '../checklist.seed.js';
+import { MIXED_RESPONSES, MIXED_CHECKLIST } from './scenarios.js';
 
 const A = (answer, evidence, explanation, extra = {}) => ({ answer, evidence, explanation, checked_range: null, na_reason: null, ...extra });
 const NA = (evidence, na_reason, explanation = 'Критерий неприменим по условию N/A.') => A('na', evidence, explanation, { na_reason });
@@ -118,9 +116,9 @@ function generic(conv, criterion) {
 }
 
 export function evaluate(conv, checklist, evaluationId, createdAt) {
-  const script = SCRIPTS[conv.conversation_id] || {};
+  const script = SCRIPTS[conv.conversation_id] || MIXED_RESPONSES[conv.conversation_id] || {};
   const items = checklist.criteria.map((c) => {
-    const seed = SEED_CRITERIA.find((s) => s.id === c.id);
+    const seed = [...SEED_CRITERIA,...MIXED_CHECKLIST.criteria].find((s) => s.id === c.id);
     let res = null;
     if (script[c.id] && seed && seed.title === c.title) res = adapt(script[c.id], seed, c);
     if (!res) res = generic(conv, c);

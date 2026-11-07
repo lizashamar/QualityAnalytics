@@ -38,8 +38,6 @@ class Settings:
     llm_model: str = ""
     llm_api_key: str = field(default="", repr=False)
     llm_base_url: str = ""
-    llm_effort: str = "medium"
-    llm_fallbacks: bool = True
     llm_max_tokens: int = 16000
     price_in_per_mtok: float | None = None
     price_out_per_mtok: float | None = None
@@ -63,7 +61,7 @@ class Settings:
         return replace(self, **kw)
 
 
-DEFAULT_MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-6-luna", "mock": "mock-heuristic-v1"}
+DEFAULT_MODELS = {"openai": "gpt-6-luna", "mock": "mock-heuristic-v1"}
 
 
 def load_settings() -> Settings:
@@ -74,8 +72,6 @@ def load_settings() -> Settings:
         llm_model=(env.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, "")).strip(),
         llm_api_key=(env.get("LLM_API_KEY") or "").strip(),
         llm_base_url=(env.get("LLM_BASE_URL") or "").strip(),
-        llm_effort=(env.get("LLM_EFFORT") or "medium").strip(),
-        llm_fallbacks=(env.get("LLM_FALLBACKS") or "1").strip().lower() not in ("0", "false", "no", "off"),
         llm_max_tokens=int(env.get("LLM_MAX_TOKENS") or 16000),
         price_in_per_mtok=_float(env.get("PRICE_IN_PER_MTOK")),
         price_out_per_mtok=_float(env.get("PRICE_OUT_PER_MTOK")),

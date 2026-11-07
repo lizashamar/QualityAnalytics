@@ -1,6 +1,3 @@
-// Начальный чек-лист из docs/checklist.pdf (Freedom Broker, «Чек-лист качества чатов»).
-// Формулировки и условия N/A — дословно из PDF.
-
 export const SEED_CRITERIA = [
   {
     id: 'c1',

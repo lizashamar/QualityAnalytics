@@ -1,23 +1,3 @@
-// Единственное место с fetch. Все методы возвращают Promise.
-// USE_MOCK=true -> данные из js/mock/, состояние в localStorage (ключ cqa.mock.v1).
-//
-// Ожидаемые эндпоинты бэкенда (относительно API_BASE):
-//   GET  /conversations?group_id=           -> record[]
-//   GET  /conversations/{id}                -> record
-//   GET  /checklists                        -> checklist[] (все версии)
-//   POST /checklists                        -> checklist (новая версия; тело: {family_id?, name, description, criteria})
-//   POST /checklists/{id}/activate          -> checklist
-//   POST /evaluations                       -> evaluation (тело: {conversation_id, checklist_id})
-//   GET  /evaluations/{id}                  -> evaluation
-//   GET  /evaluations/latest?conversation_id=&checklist_id=  -> evaluation | 404
-//   GET  /evaluations?group_id=&latest=1    -> evaluation[] (последняя по каждому диалогу)
-//   POST /appeals                           -> appeal (тело: {evaluation_item_id | conversation_id+criterion_id, comment})
-//   GET  /appeals                           -> appeal[]
-//   POST /appeals/{id}/resolve              -> appeal (тело: {new_answer, reason})
-//   GET  /checklists/compare?from=&to=      -> {from, to, diff, summary, rows} — сравнение двух версий
-//   GET  /evaluations/history?group_id=     -> [{conversation_id, checklist_id, checklist_version, total, final_total, …}]
-//   GET  /evaluations/cost                  -> {average_cost_usd}
-
 import { config } from './config.js';
 import { validAnswer, validateChecklist } from './scoring.js';
 
@@ -29,7 +9,6 @@ const qs = (o) => {
   return s ? `?${s}` : '';
 };
 
-// ---------- реальный API ----------
 async function http(method, path, body) {
   const res = await fetch(config.API_BASE + path, {
     method,
@@ -75,7 +54,6 @@ const remote = {
   getEvaluationCost: () => http('GET', '/evaluations/cost'),
 };
 
-// ---------- mock ----------
 const KEY = 'cqa.mock.v1';
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -85,10 +63,10 @@ let mockMods = null;
 
 async function mods() {
   if (!mockMods) {
-    const [conv, seed, evaluator, audio] = await Promise.all([
-      import('./mock/conversations.js'), import('./checklist.seed.js'), import('./mock/evaluator.js'), import('./mock/audio.js'),
+    const [conv, seed, evaluator, audio, scenarios] = await Promise.all([
+      import('./mock/conversations.js'), import('./checklist.seed.js'), import('./mock/evaluator.js'), import('./mock/audio.js'), import('./mock/scenarios.js'),
     ]);
-    mockMods = { ...conv, ...seed, ...evaluator, ...audio };
+    mockMods = { ...conv, ...seed, ...evaluator, ...audio, ...scenarios };
   }
   return mockMods;
 }
@@ -100,6 +78,7 @@ async function seedDb() {
     const conv = db.conversations.find((c) => c.conversation_id === id);
     db.evaluations.push(m.evaluate(conv, db.checklists[0], `ev-${db.seq++}`, '2026-11-06T12:00:00+05:00'));
   }
+  m.installDemoScenarios(db,m.evaluate,m.SEED_CHECKLIST);
   return db;
 }
 
@@ -110,7 +89,11 @@ function load() {
     loading = (async () => {
       try {
         const raw = localStorage.getItem(KEY);
-        if (raw) return (memory = JSON.parse(raw));
+        if (raw) {
+          const db=JSON.parse(raw),m=await mods();
+          if(m.installDemoScenarios(db,m.evaluate,m.SEED_CHECKLIST)) save(db);
+          return (memory=db);
+        }
       } catch { /* приватный режим и т.п. */ }
       const db = await seedDb();
       save(db);
@@ -127,13 +110,21 @@ function save(db) {
 async function withAudio(rec) {
   const r = clone(rec);
   const m = /^mock-audio:(\d+)$/.exec(r.audio_url || '');
-  if (m) r.audio_url = (await mods()).mockAudioUrl(Number(m[1]));
+  if (m) { r.audio_url = (await mods()).mockAudioUrl(Number(m[1])); r.audio_kind='test-tone'; }
   return r;
 }
 
 const latestFor = (db, convId, checklistId) => db.evaluations
   .filter((e) => e.conversation_id === convId && (!checklistId || e.checklist_id === checklistId))
   .sort((a, b) => (Date.parse(b.created_at) - Date.parse(a.created_at)) || b.id.localeCompare(a.id, 'en', { numeric: true }))[0] || null;
+
+function reviewedEvaluation(db, ev) {
+  const decisions=new Map();
+  db.appeals.filter(a=>a.evaluation_id===ev.id&&a.status==='resolved'&&a.resolution)
+    .sort((a,b)=>Date.parse(a.resolution.resolved_at)-Date.parse(b.resolution.resolved_at))
+    .forEach(a=>decisions.set(a.criterion_id,a.resolution.new_answer));
+  return {...ev,items:ev.items.map(item=>({...item,final_answer:decisions.has(item.criterion_id)?decisions.get(item.criterion_id):null}))};
+}
 
 function fail(msg) { throw new Error(msg); }
 
@@ -176,7 +167,9 @@ const mock = {
     const conv = db.conversations.find((x) => x.conversation_id === conversationId) || fail('Диалог не найден');
     const cl = db.checklists.find((x) => x.id === checklistId) || db.checklists.find((x) => x.active) || fail('Чек-лист не найден');
     const ev = (await mods()).evaluate(conv, cl, `ev-${db.seq++}`, now());
-    db.evaluations.push(ev); save(db);
+    db.evaluations.push(ev);
+    db.appeals.forEach(a=>{if(a.conversation_id===conversationId&&a.evaluation_id!==ev.id&&a.status==='pending')a.status='outdated';});
+    save(db);
     return clone(ev);
   },
   async getEvaluation(query) {
@@ -235,7 +228,7 @@ const mock = {
     const { diffCriteria, compareEvaluations } = await import('./compare.js');
     const map = (cl) => Object.fromEntries(db.conversations
       .map((c) => latestFor(db, c.conversation_id, cl.id)).filter(Boolean)
-      .map((ev) => [ev.conversation_id, { ev, criteria: cl.criteria }]));
+      .map((ev) => [ev.conversation_id, { ev:reviewedEvaluation(db,ev), criteria: cl.criteria }]));
     const brief = (cl) => ({ id: cl.id, name: cl.name, version: cl.version, family_id: cl.family_id, created_at: cl.created_at, criteria: cl.criteria.length });
     return clone({ from: brief(a), to: brief(b), diff: diffCriteria(a.criteria, b.criteria), ...compareEvaluations(map(a), map(b)) });
   },
@@ -248,9 +241,11 @@ const mock = {
       for (const cl of [...db.checklists].sort((x, y) => x.version - y.version)) {
         const ev = latestFor(db, c.conversation_id, cl.id);
         if (!ev) continue;
+        const reviewed=reviewedEvaluation(db,ev);
         const r = calculate(cl.criteria, Object.fromEntries(ev.items.map((i) => [i.criterion_id, i.answer])));
+        const final=reviewed.items.some(i=>i.final_answer!=null)?calculate(cl.criteria,Object.fromEntries(reviewed.items.map(i=>[i.criterion_id,i.final_answer??i.answer]))):null;
         out.push({ conversation_id: c.conversation_id, evaluation_id: ev.id, checklist_id: cl.id, checklist_version: cl.version,
-          total: r.total, final_total: null, gross_flag: r.gross_flag, created_at: ev.created_at, archived: !latest || latest.id !== ev.id });
+          total: r.total, final_total: final?final.total:null, gross_flag: r.gross_flag, created_at: ev.created_at, archived: !latest || latest.id !== ev.id });
       }
     }
     return out;

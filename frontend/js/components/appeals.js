@@ -1,6 +1,3 @@
-// Апелляции: создание (модальное окно на карточке), очередь и экран проверяющего.
-// Проверяющий выбирает новый ответ только из допустимых значений критерия и обязательно пишет причину.
-
 import { html, attr } from '../html.js';
 import { store } from '../store.js';
 import { calculate, allowedAnswers, validAnswer } from '../scoring.js';
@@ -10,32 +7,31 @@ import {
 } from '../results.js';
 import { transcriptView } from './transcript.js';
 import { icon } from '../icons.js';
-import { emptyState } from './ui.js';
-import { createAppeal, resolveAppeal, toast, fail } from '../actions.js';
+import { emptyState, skeleton } from './ui.js';
+import { createAppeal, resolveAppeal, ensureReviewContext, toast, fail } from '../actions.js';
 
 const STATUS = { pending: 'На рассмотрении', resolved: 'Рассмотрена', outdated: 'Устарела' };
 const tone = (st) => (st === 'pending' ? 'wn' : st === 'outdated' ? 'ne' : 'ok');
 const ST_ICON = { pending: 'clock', resolved: 'check', outdated: 'minus' };
 const statusBadge = (st) => html`<span class="b ${tone(st)}">${icon(ST_ICON[st] || 'circle')}<span>${STATUS[st] || st}</span></span>`;
 
-// ---------- очередь ----------
 export function listView(s) {
   const f = s.appealFilter;
   const list = s.appeals.filter((a) => f === 'all' || a.status === f)
     .sort((a, b) => (a.status === b.status ? Date.parse(b.created_at) - Date.parse(a.created_at) : a.status === 'pending' ? -1 : 1));
   const count = (st) => s.appeals.filter((a) => st === 'all' || a.status === st).length;
-  const tab = (k, label) => html`<button type="button" role="tab" aria-selected="${f === k}" class="${f === k ? 'tab on' : 'tab'}" data-action="appeal-filter" data-f="${k}">${label} (${count(k)})</button>`;
+  const tab = (k, label) => html`<button type="button" aria-pressed="${f === k}" class="${f === k ? 'tab on' : 'tab'}" data-action="appeal-filter" data-f="${k}">${label} (${count(k)})</button>`;
   if (!list.length) {
-    return html`<div class="page-head"><div><h2>Апелляции и пересмотр</h2>
+    return html`<div class="page-head"><div><h2>Апелляции</h2>
       <p class="sub">Проверяющий подтверждает или меняет оспоренный ответ, итог пересчитывается автоматически.</p></div></div>
-      <div class="seg" role="tablist" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
+      <div class="seg" role="group" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
       <div class="card">${emptyState('inbox', f === 'pending' ? 'Очередь пуста' : 'Апелляций нет', 'Откройте оценку диалога и нажмите «Оспорить» у критерия.')}</div>`;
   }
   return html`
-    <div class="page-head"><div><h2>Апелляции и пересмотр</h2>
+    <div class="page-head"><div><h2>Апелляции</h2>
       <p class="sub">Проверяющий подтверждает или меняет оспоренный ответ, итог пересчитывается автоматически.</p></div></div>
-    <div class="seg" role="tablist" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
-    <div class="card tw"><table class="table">
+    <div class="seg" role="group" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
+    <div class="card tw appeals-table" tabindex="0" role="region" aria-label="Очередь апелляций. Таблица прокручивается по горизонтали."><table class="table">
       <caption class="sr">Очередь апелляций</caption>
       <thead><tr><th scope="col">Апелляция</th><th scope="col">Диалог</th><th scope="col">Критерий</th><th scope="col">Исходный ответ</th>
         <th scope="col">Комментарий</th><th scope="col">Статус</th><th scope="col">Решение</th><th scope="col"><span class="sr">Действие</span></th></tr></thead>
@@ -47,7 +43,7 @@ export function listView(s) {
           <td><a href="#/conversations/${encodeURIComponent(a.conversation_id)}">${a.conversation_id}</a></td>
           <td>${c ? c.title : a.criterion_id}</td>
           <td>${answerBadge(c, a.original_answer)}</td>
-          <td class="clip">${a.comment}</td>
+          <td class="clip"><details class="comment-preview"><summary>${a.comment.length>90?a.comment.slice(0,90)+'…':a.comment}</summary><p>${a.comment}</p></details></td>
           <td>${statusBadge(a.status)}</td>
           <td>${a.resolution ? answerBadge(c, a.resolution.new_answer) : '—'}</td>
           <td><a class="btn ${a.status === 'pending' ? 'p' : ''}" href="#/appeals/${encodeURIComponent(a.id)}">${a.status === 'pending' ? 'Рассмотреть' : 'Открыть'}</a></td>
@@ -56,7 +52,6 @@ export function listView(s) {
       </tbody></table></div>`;
 }
 
-// ---------- экран проверяющего ----------
 const encodeAns = (a) => (typeof a === 'number' ? `n:${a}` : String(a));
 const decodeAns = (v) => (v.startsWith('n:') ? Number(v.slice(2)) : v);
 
@@ -65,11 +60,21 @@ export function reviewView(s) {
   const ap = s.appeals.find((a) => a.id === id);
   if (!ap) return html`<a href="#/appeals" class="back">← К очереди</a><h2>Апелляция не найдена</h2>`;
   const ev = s.evaluations[ap.evaluation_id];
-  const conv = s.conversations.find((c) => c.conversation_id === ap.conversation_id);
-  if (!ev || !conv) return html`<a href="#/appeals" class="back">← К очереди</a><p class="mu">Загружаем оценку…</p>`;
+  const conv = s.conversations.find((c) => c.conversation_id === ap.conversation_id) || s.reviewConversations?.[ap.conversation_id];
+  if (!ev || !conv) {
+    const load = s.reviewLoads?.[id];
+    return html`<a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a>
+      <div class="page-head"><div><h2>Апелляция ${ap.id}</h2><p class="sub">Диалог ${ap.conversation_id}</p></div></div>
+      ${load?.status === 'error' ? html`<section class="card">${emptyState('alert', 'Не удалось загрузить материалы', load.error,
+        html`<button type="button" class="p" data-action="review-retry" data-id="${id}">${icon('refresh')}Повторить загрузку</button>`)}</section>`
+        : html`<section class="card" aria-busy="true" aria-label="Загрузка материалов апелляции"><p role="status">Загружаем оценку и диалог…</p>${skeleton(4)}</section>`}`;
+  }
   const cl = checklistById(s, ev.checklist_id);
   const c = criterionOf(cl, ap.criterion_id);
   const item = ev.items.find((i) => i.criterion_id === ap.criterion_id);
+  if (!item) return html`<a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a>
+    <div class="page-head"><h2>Материалы апелляции недоступны</h2></div><section class="card">${emptyState('alert', 'Критерий не найден в оценке',
+      'Оспоренный пункт отсутствует в сохранённой оценке. Вернитесь к очереди и проверьте другие апелляции.')}</section>`;
   const R = finalResult(s, ev);
   const latest = latestEvaluation(s, ev.conversation_id);
   const pending = ap.status === 'pending';
@@ -93,7 +98,7 @@ export function reviewView(s) {
       <p class="sub">Диалог <a href="#/conversations/${encodeURIComponent(conv.conversation_id)}">${conv.conversation_id}</a> · ${conv.language} · создана ${fmtDate(ap.created_at)}</p>
     </div></div>
     ${latest && latest.id !== ev.id ? html`<p class="notice wn">${icon('info')}<span>Диалог переоценён после подачи апелляции (новая оценка ${latest.id}). Открытые апелляции по старой оценке больше не принимаются.</span></p>` : ''}
-    <div class="split">
+    <div class="split reviewer-workspace">
       <div class="col">
         <section class="card" aria-labelledby="orig-h">
           <h3 id="orig-h">Исходная оценка</h3>
@@ -119,7 +124,7 @@ export function reviewView(s) {
           <textarea id="rv-reason" rows="3" required data-input="review-reason" aria-describedby="rv-err" ${attr('aria-invalid', !!r.error)}>${r.reason}</textarea>
           <p id="rv-err" class="err" role="alert">${r.error || ''}</p>
           ${preview ? html`<p class="preview" aria-live="polite">Итог после решения: <b>${fmtScore(R.final.total)}</b> → <b>${fmtScore(preview.total)}</b>${preview.gross_flag ? ' · грубое нарушение' : ''}</p>` : ''}
-          <div class="row end"><a class="btn" href="#/appeals">Отмена</a><button type="submit" class="p" ${attr('disabled', !!r.busy)}>Подтвердить решение</button></div>
+          <div class="row end"><a class="btn" href="#/appeals">Отмена</a><button type="submit" class="p" ${attr('disabled', !!r.busy)}>${r.busy?'Сохраняем решение…':'Подтвердить решение'}</button></div>
         </form>` : !ap.resolution ? html`<section class="card"><h3>Апелляция устарела</h3>
           <p class="mu">Диалог был переоценён, исходная оценка больше не действует. Если спор остался, оспорьте новую оценку в карточке диалога.</p></section>`
         : html`<section class="card"><h3>Решение проверяющего</h3>
@@ -136,7 +141,6 @@ export function reviewView(s) {
     </div>`;
 }
 
-// ---------- модальное окно «Оспорить» ----------
 export function appealModalView(s, m) {
   const ev = s.evaluations[m.evaluationId];
   const cl = checklistById(s, ev.checklist_id);
@@ -156,13 +160,14 @@ export function appealModalView(s, m) {
       <label for="ap-comment">Комментарий <span aria-hidden="true">*</span><span class="sr">(обязательно)</span></label>
       <textarea id="ap-comment" rows="4" placeholder="Почему оценка неверна? Укажите номер реплики, если можно." data-input="appeal-comment" aria-describedby="ap-err" ${attr('aria-invalid', !!m.error)}>${m.comment || ''}</textarea>
       <p id="ap-err" class="err" role="alert">${m.error || ''}</p>
-      <div class="row end"><button type="button" data-action="modal-close">Отмена</button><button type="submit" class="p" ${attr('disabled', m.busy)}>Отправить апелляцию</button></div>`
+      <div class="row end"><button type="button" data-action="modal-close">Отмена</button><button type="submit" class="p" ${attr('disabled', m.busy)}>${m.busy?'Отправляем…':'Отправить апелляцию'}</button></div>`
     : html`<p class="mu">По всем критериям уже есть апелляции на рассмотрении.</p><div class="row end"><button type="button" data-action="modal-close">Закрыть</button></div>`}
   </form>`;
 }
 
 export const handlers = {
   click: {
+    'review-retry'(el) { return ensureReviewContext(el.dataset.id); },
     'appeal-filter'(el) { store.set({ appealFilter: el.dataset.f }); },
     'appeal-open'(el) {
       const s = store.get();
@@ -224,10 +229,12 @@ export const handlers = {
         store.set({ review: { appealId: id, answer, reason, busy: true } });
         await resolveAppeal(id, { new_answer: answer, reason });
         const after = finalResult(store.get(), ev).final.total;
-        store.set({ review: null });
+        if (store.get().route.name === 'review' && store.get().route.params.id === id) store.set({ review: null });
         toast(`Решение сохранено. Итог: ${fmtScore(before)} → ${fmtScore(after)}`, 'ok');
       } catch (e) {
-        store.set({ review: { appealId: id, answer, reason, busy: false } });
+        if (store.get().route.name === 'review' && store.get().route.params.id === id) {
+          store.set({ review: { appealId: id, answer, reason, busy: false } });
+        }
         fail(e);
       }
     },

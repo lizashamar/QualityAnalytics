@@ -1,6 +1,6 @@
 # CQA — бэкенд
 
-FastAPI + SQLite. Реализует REST-контракт из шапки `frontend/js/api.js` под префиксом `/api`
+FastAPI + SQLite. Реализует описанный ниже REST-контракт под префиксом `/api`
 и отдаёт `frontend/` как статику: фронтенд открывается на http://localhost:8000 и работает
 с реальным API (не в mock-режиме).
 
@@ -94,13 +94,11 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 | Провайдер | Настройки |
 |---|---|
 | mock (по умолчанию) | `LLM_PROVIDER=mock` |
-| Claude | `LLM_PROVIDER=anthropic`, `LLM_API_KEY=...`, `LLM_MODEL=` (пусто = `claude-opus-5-5`), `LLM_EFFORT=medium` |
 | OpenAI | `LLM_PROVIDER=openai`, `LLM_API_KEY=...`, `LLM_MODEL=...` |
 | Gemini | `LLM_PROVIDER=openai`, `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`, ключ, модель |
 | Ollama | `LLM_PROVIDER=openai`, `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=...` (ключ не нужен) |
 
 После правки `.env` перезапустите uvicorn. Проверка: `GET /api/health`.
-Для Claude включён серверный fallback при отказе модели (`LLM_FALLBACKS=1`; `0` — выключить).
 
 ## Стоимость одной оценки
 
@@ -108,7 +106,7 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 если ответ не прошёл валидацию. В `evaluation.usage` хранится сумма по всем вызовам:
 `calls`, `input_tokens`, `output_tokens`, `duration_ms`, `retried`, `cost_usd`, где
 `cost_usd = input_tokens / 1e6 × PRICE_IN_PER_MTOK + output_tokens / 1e6 × PRICE_OUT_PER_MTOK`
-(задайте цены в `.env`, например `4` и `20` для claude-opus-5-5).
+(задайте в `.env` цены выбранной модели).
 Батч (`GET /api/jobs/{id}`) и `evaluate_all` суммируют стоимость по набору; `evaluate_all` печатает
 среднюю цену за оценку. В mock-режиме токены — грубая оценка по длине текста, реальные цифры дают
 только настоящие провайдеры: прогоните 3–5 диалогов и возьмите среднее.
@@ -127,7 +125,7 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
   `checked_range`. При ошибках — один повтор с их перечнем; если снова не прошло, сохраняется
   валидное, остальное — в `warnings`.
 - Итог считает `app/scoring.py` — порт `frontend/js/scoring.js` 1в1. Общие кейсы в
-  `tests/fixtures/scoring_cases.json` прогоняются и в pytest, и в `node frontend/test/scoring.test.js`.
+  JS/Python-кейсы находятся в отдельном QA-наборе вне этого репозитория.
 
 ## REST
 
@@ -137,10 +135,13 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 | GET | `/api/conversations/{id}` | диалог |
 | POST | `/api/datasets/import` `{group_id}` | импорт у организаторов → `{imported, total, skipped}` |
 | GET | `/api/checklists` | все версии |
+| GET | `/api/checklists/compare?from=&to=` | изменения критериев и сравнение оценок двух версий |
 | POST | `/api/checklists` `{name, criteria, family_id?, activate?}` | новая версия (version = max+1) |
 | POST | `/api/checklists/{id}/activate` | сделать активной |
 | POST | `/api/evaluations` `{conversation_id, checklist_id?}` | оценить (по умолчанию активной версией) |
 | GET | `/api/evaluations` | последние оценки по диалогам |
+| GET | `/api/evaluations/history?group_id=` | последние оценки каждого диалога по каждой версии |
+| GET | `/api/evaluations/cost` | сводная стоимость оценок |
 | GET | `/api/evaluations/latest?conversation_id=&checklist_id=` | последняя оценка (404, если нет) |
 | GET | `/api/evaluations/{id}` | оценка (в т.ч. архивная) |
 | POST | `/api/evaluations/batch` | фоновый батч → `{job_id}` |
@@ -154,21 +155,18 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 `open|resolved|outdated` (фронтенд показывает `open` как «На рассмотрении»). Ошибки: `400` (валидация),
 `404`, `409` (дубль или повторное решение), `502` (модель или API организаторов), текст — в `detail`.
 
-## Тесты
+## Проверка
 
-```powershell
-cd backend; .venv\Scripts\python.exe -m pytest -q
-cd ..\frontend; node test/scoring.test.js
-```
-
-Тесты не ходят в сеть (организаторы и модель подменяются) и не трогают `cqa.db`.
+Тесты API, фронтенда и браузерные сценарии хранятся вне рабочего дерева.
+Инструкции по отдельному QA-набору приведены в [корневом README](../README.md#quality-assurance).
+Тесты используют временные базы и mock-провайдеров, без платных вызовов и изменения `cqa.db`.
 
 ## Безопасность
 
 `.env`, `*.db` и `docs/dev.json` в `.gitignore`. В логах нет ключей, транскриптов и `audio_url`,
 только id диалогов, токены, время и стоимость. Авторизации нет (прототип).
 
-## Checkpoint 1: ingestion proxy and local snapshot
+## Organizer proxy and local snapshot
 
 Configure `ORGANIZER_API_URL` in `backend/.env` with the organizer's GET endpoint.
 The URL can include `{group_id}`; otherwise the backend adds/replaces the query parameter.
@@ -199,17 +197,9 @@ curl 'http://localhost:8000/api/dialogues'
 - DEV is expected to contain 65 dialogues; inspect `total_records`, `records.length`, and `skipped`
   to verify the live batch. Other group sizes are accepted.
 
-Tests: `.venv/bin/python -m pytest backend/tests -q`.
 Live organizer verification requires a configured URL; automated tests use a 65-dialogue fixture.
 
-Checkpoint progress: Checkpoint 1 verified against the live DEV batch: 65 records, none skipped.
-Checkpoint 2 uses strict structured outputs and has automated client tests. A live
-`gpt-6-luna` evaluation succeeded: 8 criteria, no validation warnings, one call,
-2,914 input tokens and 1,111 output tokens; estimated cost $0.000847 using configured rates.
-Checkpoints 3–6 are implemented with automated scoring, API and UI component/handler checks.
-Browser layout/playback QA remains manual; the secret control group is tested with fixtures only.
-
-## Checkpoint 2: strict OpenAI evaluations
+## Strict OpenAI evaluations
 
 Set these values in `backend/.env` (never commit the actual key):
 
@@ -234,7 +224,7 @@ without transcript text or API credentials. Rates above are specification assump
 Request format reference: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
 Other OpenAI-compatible servers must support this schema format and completion token parameter.
 
-## Checkpoint 3: scoring scales
+## Scoring scales
 
 Checklist criteria submitted to `POST /api/checklists` can specify
 `evaluation_type: "binary"`, `"scale_10"`, or `"scale_20"`. Binary criteria use
@@ -251,10 +241,7 @@ rounded once to two decimals and bounded to 0–100. If every scored criterion i
 the result is `null` (unscorable), rather than awarding a score without applicable criteria.
 Negative and nonfinite weights are rejected when saving a checklist.
 
-Validation: 78 backend tests and 41 frontend scoring checks pass, including shared
-cross-language fixtures and an API save-and-evaluate test for both explicit scales.
-
-## Checkpoints 4–6: result UI, appeals and control readiness
+## Result UI, appeals and control readiness
 
 - The scorecard shows model, input/output tokens and estimated USD cost to six decimal places.
   The total score displays two decimals. Actual cost depends on the configured rates and usage.
@@ -302,16 +289,8 @@ Keep API keys exclusively on the backend. For a Dynamics deployment on a differe
 configure that exact trusted origin in backend CORS before embedding; localhost origins are
 currently allowed for development. Signed audio URLs must remain valid for playback.
 
-Additional checks:
-
-```sh
-node frontend/test/results.test.js
-node frontend/test/workflows.test.js
-```
-
-Browser-based visual QA and real playback remain manual checks because no browser connection
-was available. Component/handler checks cover navigation, timestamps, escaping, cost display,
-review previews, full-scale editor submission, group propagation and state refresh.
+Browser/API regression suites and screenshots are maintained in the external QA folder.
+Live organizer playback still depends on the signed audio URL remaining valid.
 
 ### Batch evaluation from the dialogue list
 
@@ -321,5 +300,3 @@ IDs, including selections hidden by a later filter. **Оценить все** ev
 in the loaded group regardless of filters. Evaluation creates a new result for already-scored
 conversations. Controls are disabled while a batch runs; progress and success/error counts are
 shown. Requests run sequentially and continue after individual failures.
-
-Batch UI checks: `node frontend/test/batch.test.js` (uses simulated API responses, no paid calls).

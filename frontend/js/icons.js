@@ -1,4 +1,3 @@
-// Набор SVG-иконок (собственные простые контуры, 24×24, цвет = currentColor). Без эмодзи.
 import { trustedConstant } from './html.js';
 
 const P = {
@@ -37,7 +36,6 @@ const P = {
 
 const CLS = /^[a-z0-9 -]*$/;
 
-/** icon('check') -> inline SVG, декоративная (aria-hidden). Разметка собрана только из констант выше. */
 export function icon(name, cls = '') {
   const body = P[name] || P.circle;
   const c = CLS.test(cls) ? cls : '';

@@ -1,6 +1,3 @@
-// Производные данные для экранов: финальный результат с учётом решений проверяющего,
-// подписи ответов, статусы. Критерии всегда берутся из версии чек-листа, по которой сделана оценка.
-
 import { calculate, round2 } from './scoring.js';
 import { html } from './html.js';
 import { icon } from './icons.js';
@@ -11,7 +8,7 @@ export const ROLE = { client: 'Клиент', operator: 'Оператор', bot:
 
 export const checklistById = (s, id) => s.checklists.find((c) => c.id === id) || null;
 export const activeChecklist = (s) => s.checklists.find((c) => c.active) || s.checklists[s.checklists.length - 1] || null;
-export const latestEvaluation = (s, convId) => s.evaluations[s.latest[convId]] || null;
+export const latestEvaluation = (s, convId) => s.evaluations?.[s.latest?.[convId]] || null;
 export const criterionOf = (cl, id) => (cl ? cl.criteria.find((c) => c.id === id) : null) || null;
 export const checklistLabel = (cl) => (cl ? `${cl.name} · v${cl.version}` : 'неизвестный чек-лист');
 
@@ -62,7 +59,6 @@ export function answerText(c, a) {
   return a === 'yes' ? 'Да' : a === 'no' ? 'Нет' : String(a);
 }
 
-/** Цвет + иконка + текст (смысл не передаётся только цветом). */
 export function answerTone(c, a) {
   if (!c || a === undefined || a === null) return { cls: 'ne', icon: 'help' };
   if (a === 'na') return { cls: 'ne', icon: 'minus' };
@@ -116,8 +112,11 @@ export function fmtDate(iso) {
 /** Оценки диалога по разным версиям чек-листа (из s.history): последние две версии, по возрастанию.
  *  Возвращает null, если версия одна. Итог — с учётом решения проверяющего, если оно есть. */
 export function versionTrail(s, convId) {
-  const list = (s.history || []).filter((h) => h.conversation_id === convId)
-    .sort((a, b) => a.checklist_version - b.checklist_version || String(a.created_at).localeCompare(String(b.created_at)));
+  const history=(s.history||[]).filter(h=>h.conversation_id===convId);
+  const current=latestEvaluation(s,convId)?.checklist_id||[...history].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]?.checklist_id;
+  const family=s.checklists?.find(c=>c.id===current)?.family_id;
+  const list=history.filter(h=>!family||s.checklists.some(c=>c.id===h.checklist_id&&c.family_id===family))
+    .sort((a,b)=>a.checklist_version-b.checklist_version||String(a.created_at).localeCompare(String(b.created_at)));
   if (list.length < 2) return null;
   const pick = list.slice(-2).map((h) => ({ version: h.checklist_version, checklist_id: h.checklist_id, total: h.final_total ?? h.total }));
   const [a, b] = pick;
@@ -132,5 +131,4 @@ export function trailView(t) {
     ${t.delta != null ? html`<span class="ver-delta">${icon(ic)}${t.delta > 0 ? '+' : ''}${fmtPts(t.delta)}</span>` : ''}</span>`;
 }
 
-/** Номер реплики для людей: индекс в transcript + 1. */
 export const replicaNo = (i) => i + 1;

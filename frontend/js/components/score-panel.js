@@ -1,12 +1,9 @@
-// Панель оценки: показывает только то, что пришло в evaluation; итог после решений
-// проверяющего пересчитывается через scoring.js. Критерии — из версии чек-листа оценки.
-
 import { html } from '../html.js';
 import { offsets, fmtOffset } from './transcript.js';
 import { icon } from '../icons.js';
 import {
   finalResult, criterionOf, answerBadge, answerText, fmtScore, fmtPts, scoreTone,
-  checklistLabel, activeChecklist, fmtDate, replicaNo,
+  checklistLabel, activeChecklist, latestEvaluation, fmtDate, replicaNo,
 } from '../results.js';
 import { scoreRing, meter } from './ui.js';
 
@@ -40,7 +37,7 @@ function pointsText(c, row) {
   return html`<span class="pts"><b>${fmtPts(row.points)}</b><span> / ${fmtPts(row.effective_weight)}</span></span>`;
 }
 
-function itemView(item, c, R, conv) {
+function itemView(item, c, R, conv, allowAppeal = true) {
   const cid = item.criterion_id;
   const origRow = R.originalCalc.rows.find((r) => r.criterion_id === cid);
   const finRow = R.final.rows.find((r) => r.criterion_id === cid);
@@ -49,12 +46,12 @@ function itemView(item, c, R, conv) {
   const origPtsRow = origRow ? { ...origRow, points: item.points } : null; // баллы — как пришли
   return html`<article class="crit${c && c.is_flag ? ' is-flag' : ''}" id="crit-${cid}" aria-labelledby="crit-h-${cid}">
     <div class="crit-head">
-      <div class="crit-title"><h4 id="crit-h-${cid}">${c ? c.title : cid}</h4>${weightInfo(c, origRow)}</div>
+      <div class="crit-title"><h4 id="crit-h-${cid}">${c ? c.title : cid}</h4>${weightInfo(c, dec ? finRow : origRow)}</div>
       <div class="ans">${answerBadge(c, dec ? dec.resolution.new_answer : item.answer)} ${pointsText(c, dec ? finRow : origPtsRow)}</div>
     </div>
-    ${c && c.question ? html`<p class="q">${c.question}</p>` : ''}
-    <p class="expl">${item.explanation}</p>
-    ${item.answer === 'na' ? html`<p class="na">${icon('info')}<span><b>Почему N/A:</b> ${item.na_reason || '—'}</span></p>` : ''}
+    ${c && c.question ? html`<details class="criterion-rule"><summary>Правило оценки ${icon('down')}</summary><div><p class="q">${c.question}</p></div></details>` : ''}
+    ${dec?html`<p class="hint">Обоснование исходной оценки</p>`:''}<p class="expl">${item.explanation}</p>
+    ${R.finalAnswers[cid] === 'na' ? html`<p class="na">${icon('info')}<span><b>Почему N/A:</b> ${dec?.resolution.reason || item.na_reason || '—'}</span></p>` : ''}
     ${evidenceLinks(item, conv)}
     ${dec ? html`<ol class="layers" aria-label="История оценки по критерию">
       <li><span class="lbl">Исходная оценка</span>${answerBadge(c, item.answer)} ${pointsText(c, origPtsRow)}</li>
@@ -66,7 +63,7 @@ function itemView(item, c, R, conv) {
     <div class="crit-foot">
       ${pend
         ? html`<a class="b wn" href="#/appeals/${pend.id}">${icon('clock')}<span>Апелляция ${pend.id} на рассмотрении</span></a>`
-        : html`<button type="button" class="btn-sm" data-action="appeal-open" data-criterion="${cid}" aria-label="Оспорить оценку по критерию «${c ? c.title : cid}»">${icon('scale')}Оспорить</button>`}
+        : allowAppeal ? html`<button type="button" class="btn-sm" data-action="appeal-open" data-criterion="${cid}" aria-label="Оспорить оценку по критерию «${c ? c.title : cid}»">${icon('scale')}Оспорить</button>` : ''}
     </div>
   </article>`;
 }
@@ -100,7 +97,7 @@ function grossBanner(R, ev) {
     <div class="gross-body"><h3 id="gross-h">Выявлено грубое нарушение</h3>
       ${flagItems.map((i) => {
         const c = criterionOf(R.checklist, i.criterion_id);
-        return html`<p><b>${c.title}.</b> ${i.explanation}</p>
+        return html`<p><b>${c.title}.</b> ${R.decisions[i.criterion_id]?.resolution.reason || i.explanation}</p>
           ${(i.evidence || []).length ? html`<div class="evid">${i.evidence.map((x) => html`<button type="button" class="chip on-danger" data-action="jump" data-indices="${x}">${icon('quote')}реплика ${replicaNo(x)}</button>`)}</div>` : ''}`;
       })}
       <p class="gross-note">Флаг не обнуляет итоговый балл и учитывается отдельно.</p></div>
@@ -109,9 +106,10 @@ function grossBanner(R, ev) {
 
 export function scorePanelView(s, conv, ev) {
   const R = finalResult(s, ev);
+  const allowAppeal=latestEvaluation(s,conv.conversation_id)?.id===ev.id;
   const active = activeChecklist(s);
-  const W = R.originalCalc.applicable_weight;
-  const naCount = ev.items.filter((i) => i.answer === 'na').length;
+  const W = R.criteria.filter(c=>!c.is_flag&&R.finalAnswers[c.id]!=='na').reduce((sum,c)=>sum+Number(c.weight||0),0);
+  const naCount = ev.items.filter(i=>R.finalAnswers[i.criterion_id]==='na').length;
   const missing = !R.checklist;
 
   const groups = [];
@@ -124,6 +122,11 @@ export function scorePanelView(s, conv, ev) {
     if (!g) groups.push((g = { section: c.section, items: [] }));
     g.items.push([item, c]);
   }
+  const needsAttention = item => {
+    const c=criterionOf(R.checklist,item.criterion_id), row=R.final.rows.find(r=>r.criterion_id===item.criterion_id);
+    return c?.is_flag ? R.finalAnswers[c.id]==='yes' : row?.applicable && row.points < row.effective_weight;
+  };
+  const issueCount=ev.items.filter(needsAttention).length;
   const orphan = ev.items.filter((i) => !used.has(i.criterion_id));
   if (orphan.length) groups.push({ section: 'Без критерия в чек-листе', items: orphan.map((i) => [i, null]) });
 
@@ -162,7 +165,10 @@ export function scorePanelView(s, conv, ev) {
     <section class="card" aria-labelledby="sec-h"><h3 id="sec-h">Баллы по секциям</h3>${sectionsView(R.original.sections || [], R.final.sections, R.changed, R)}</section>
     <section class="card" aria-labelledby="crit-h">
       <div class="card-head"><h3 id="crit-h">Критерии</h3>
-        <button type="button" class="btn-sm" data-action="appeal-open" data-criterion="">${icon('scale')}Оспорить оценку…</button></div>
-      ${groups.map((g) => html`<h4 class="group">${g.section}</h4>${g.items.map(([i, c]) => itemView(i, c, R, conv))}`)}
+        ${allowAppeal?html`<button type="button" class="btn-sm" data-action="appeal-open" data-criterion="">${icon('scale')}Оспорить оценку…</button>`:''}</div>
+      ${!allowAppeal?html`<p class="hint">Материалы сохранённой оценки доступны для чтения. Новая апелляция доступна у последней оценки в загруженной группе.</p>`:''}
+      <div class="seg criteria-filters" role="group" aria-label="Фильтр критериев"><button type="button" class="tab ${s.criteriaFilter!=='issues'?'on':''}" data-action="criteria-filter" data-filter="all" aria-pressed="${s.criteriaFilter!=='issues'}">Все (${ev.items.length})</button><button type="button" class="tab ${s.criteriaFilter==='issues'?'on':''}" data-action="criteria-filter" data-filter="issues" aria-pressed="${s.criteriaFilter==='issues'}">Требуют внимания (${issueCount})</button></div>
+      ${groups.map(g=>{const items=g.items.filter(([i])=>s.criteriaFilter!=='issues'||needsAttention(i));return items.length?html`<h4 class="group">${g.section}</h4>${items.map(([i,c])=>itemView(i,c,R,conv,allowAppeal))}`:'';})}
+      ${s.criteriaFilter==='issues'&&!issueCount?html`<p class="hint">Нет критериев с потерей баллов или грубыми нарушениями.</p>`:''}
     </section>`;
 }

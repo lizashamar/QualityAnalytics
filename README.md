@@ -1,7 +1,7 @@
 # Conversation Quality Analytics
 
-A FastAPI + SQLite prototype with a modular vanilla JavaScript interface for evaluating
-RU, KZ and EN support chats and call transcripts. No login is required.
+FastAPI + SQLite with a vanilla JavaScript interface for evaluating RU, KZ and EN support chats
+and call transcripts. The prototype does not require login or a frontend build step.
 
 ## Run locally
 
@@ -9,45 +9,57 @@ RU, KZ and EN support chats and call transcripts. No login is required.
 python3 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.txt
 cp backend/.env.example backend/.env  # only if .env does not already exist
-# Fill backend/.env with the OpenAI key and organizer URL.
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
-Open <http://localhost:8000>. In **Диалоги**, use **Загрузить группу** to import DEV
-or the released control group. Open a dialogue and select **Оценить**. The result shows
-scores, rationale, evidence, tokens and estimated cost. Voice evidence links seek the recording.
+Configure the model provider, API key and organizer URL in `backend/.env`.
+Open <http://localhost:8000>. See [backend documentation](backend/README.md) for Windows setup,
+configuration, REST endpoints, cost accounting and the control-batch runbook.
+Credentials, local datasets and databases are excluded from Git.
 
-On **Диалоги**, select rows with checkboxes and choose **Оценить выбранные**, or use
-**Оценить все** for every dialogue in the loaded group (including filtered-out rows).
-Choose the checklist above the table. Progress and success/error counts appear during the batch.
+## Workflows
 
-Use **Оспорить** to submit an appeal; review it in **Апелляции**. A reviewer can retain
-or change the answer with a required note; the preview and final total recalculate.
-In **Чек-листы**, create or edit criteria, save a version, activate it, and apply it to
-selected dialogues. Existing evaluations retain their original checklist version.
+- **Обзор:** quality metrics, observed trends, review priorities and links to filtered conversations.
+- **Диалоги:** search, shareable language/channel/status/quality/date filters, sorting and 25-row
+  pages. Selections persist across filtering and pages. **Оценить выбранные** processes selected
+  IDs; **Оценить все** processes every conversation in the loaded group.
+- **Conversation details:** transcript search, evidence highlighting, audio seeking and scores
+  with explanations, checklist version and reviewer history. Cmd/Ctrl+K opens quick navigation.
+- **Апелляции:** submit a criterion dispute, then retain or change its answer with a required note.
+  The preview and final score recalculate; reevaluation expires pending disputes on old results.
+- **Чек-листы:** edit criteria, scales, weights, N/A conditions and independent violation flags.
+  Saving creates a version; existing evaluations retain their original methodology.
+  Reevaluate previously scored, selected or the first N conversations with the saved version.
+  Compare versions to inspect criterion changes, score differences and underlying conversations;
+  reviewer adjustments remain separate from the original scores.
 
-## Progress
+Both themes use the shared [design system](DESIGN.md) and locally served CoFo Sans font.
+[Product context](PRODUCT.md) describes data boundaries and supported workflows.
 
-- [x] 1: organizer proxy, local snapshot and dialogue endpoints; live DEV verified (65 records).
-- [x] 2: strict JSON schema, parser, token/cost logging; live `gpt-6-luna` evaluation verified.
-- [x] 3: full integer scales, proportional N/A redistribution, independent violation flags and rounding.
-- [x] 4: responsive result components, transcript/audio evidence navigation and cost display.
-- [x] 5: operator appeals, reviewer preview/override, stored decisions and recalculation.
-- [x] 6: dynamic checklist editing and group import; control-group routing tested with fixtures.
+## Synthetic demo
 
-Automated API and UI component/handler tests pass. Interactive browser layout and real audio
-playback still need a manual check: no connected browser was available during implementation.
-The unreleased secret control dataset has not been requested.
+Open <http://localhost:8000/?mock=1#/overview>, or select **Открыть синтетические сценарии**
+from the API overview. The demo contains 11 conversations, including 5 mixed KZ/RU scenarios,
+a bilingual checklist and 5 seeded appeals. Existing demo storage is extended without resetting
+user records or the active checklist. API datasets remain separate.
 
-## Verify
+Demo audio is a generated test signal, not spoken dialogue. The player supports seeking,
+position preservation, source retry and timestamp mismatch warnings.
+[Scenario verification and remaining improvements](docs/design/SCENARIOS-AUDIO-QA.md) describe
+what was checked and what still needs real speech data.
+
+## Quality assurance
+
+Tests, browser-only dependencies, screenshots and historical reference material are maintained
+in a separate local QA folder, outside this source checkout. They are intentionally excluded
+from this commit. The QA folder contains a source snapshot, checksummed archive, test dependencies
+and a runner that links the suites to the current application code.
+
+On this laptop the folder is `../QualityAnalytics-QA-2026-11-07`. From the repository root:
 
 ```sh
-.venv/bin/python -m pytest backend/tests -q
-node frontend/test/scoring.test.js
-node frontend/test/results.test.js
-node frontend/test/workflows.test.js
-node frontend/test/batch.test.js
+../QualityAnalytics-QA-2026-11-07/run-tests.sh "$PWD"
 ```
 
-See [backend documentation](backend/README.md) for configuration, REST endpoints, cost assumptions,
-Windows commands and the T+23h control-batch runbook. Credentials and local datasets are excluded from Git.
+If the checkout or QA folder moves, pass the new checkout path to that runner. Browser setup and
+commands are documented in the QA folder's README. No test dependency is required to run the app.

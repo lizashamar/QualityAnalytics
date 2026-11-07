@@ -1,6 +1,4 @@
-// Демо-диалоги в формате API (record). Метки времени — как придут с бэкенда:
-// у чатов "MM:SS", у звонков ISO 8601 с поясом. audio_url "mock-audio:<сек>" mock-слой
-// заменяет на синтетическую WAV-запись (blob), чтобы перемотка работала без файлов.
+// Synthetic examples; mock-audio URLs become local PCM WAV blobs.
 
 export const MOCK_CONVERSATIONS = [
   {

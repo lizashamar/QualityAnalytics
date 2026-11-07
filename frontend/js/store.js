@@ -1,5 +1,3 @@
-// Единственное глобальное состояние приложения + подписки.
-
 const initial = {
   datasetGroup: '',
   importing: false,
@@ -20,6 +18,8 @@ const initial = {
   running: {}, // conversation_id -> true, пока идёт оценка
   highlight: { indices: [], range: null },
   review: null, // { appealId, answer, reason } — форма проверяющего
+  reviewConversations: {}, // context from other dataset groups; excluded from analytics
+  reviewLoads: {}, // appeal_id -> { status: loading|ready|error, error? }
   draft: null, // черновик чек-листа в редакторе
   modal: null, // { type, ... }
   applying: null, // { done, total } — массовая оценка

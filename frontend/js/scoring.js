@@ -1,18 +1,5 @@
-// Чистый расчёт итога по чек-листу. Без DOM, без состояния — используется и в браузере, и в node-тестах.
-//
-// calculate(criteria, answers) -> { total, sections, gross_flag, rows, applicable_weight }
-//   criteria: массив критериев чек-листа (порядок = порядок отображения)
-//   answers:  { [criterion_id]: "yes" | "no" | "na" | number }
-//
-// Правила (см. чек-лист, «Порядок расчёта»):
-// 1. is_flag-критерии в баллы не входят; «yes» по ним ставит gross_flag, итог НЕ обнуляется.
-// 2. Ответ "na" исключает критерий.
-// 3. W = сумма весов применимых критериев; вес после перераспределения = weight / W * 100.
-// 4. yesno: yes = 1 × вес, no = 0; scale: ступень / максимальная ступень × вес.
-// 5. total округляется до 2 знаков; при W = 0 total = null.
-// 6. sections считаются по тем же правилам внутри секции.
-// Отсутствующий или недопустимый ответ не исключает критерий (иначе итог незаметно вырастет):
-// критерий остаётся применимым, даёт 0 баллов, а строка помечается error.
+// N/A redistributes applicable scored weights to 100; violation flags do not change points.
+// Missing/invalid answers retain weight and earn zero. No applicable criteria yields null.
 
 export function round2(x) {
   return Math.round((x + Number.EPSILON) * 100) / 100;
@@ -54,7 +41,6 @@ export function validAnswer(criterion, answer) {
   return answer === 'yes' || answer === 'no';
 }
 
-/** Доля полного веса за ответ (0..1). */
 function fraction(criterion, answer) {
   if (criterion.type === 'scale') {
     const m = maxStep(criterion);

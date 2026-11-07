@@ -1,5 +1,3 @@
-// Список диалогов: поиск, фильтры (язык, канал, статус), итог и флаг грубого нарушения.
-
 import { html, attr } from '../html.js';
 import { icon } from '../icons.js';
 import { store } from '../store.js';
@@ -11,6 +9,7 @@ import {
   versionTrail, trailView,
 } from '../results.js';
 import { scoreRing, emptyState } from './ui.js';
+import { FILTER_DEFAULTS, PAGE_SIZE, matchesRow, sortRows, explorerHref } from '../design/explorer.js';
 
 const STATUS_TONE = { none: 'ne', evaluated: 'ok', appeal: 'wn', reviewed: 'ac' };
 const STATUS_ICON = { none: 'circle', evaluated: 'check', appeal: 'clock', reviewed: 'scale' };
@@ -23,15 +22,10 @@ export function rowsFor(s) {
   });
 }
 
-function matches(f, r) {
-  const c = r.conv;
-  if (f.language && c.language !== f.language) return false;
-  if (f.channel && c.channel !== f.channel) return false;
-  if (f.status === 'flag') { if (!(r.R && r.R.final.gross_flag)) return false; }
-  else if (f.status && r.status !== f.status) return false;
-  const q = f.q.trim().toLowerCase();
-  if (!q) return true;
-  return c.conversation_id.toLowerCase().includes(q) || c.transcript.some((t) => String(t.text).toLowerCase().includes(q));
+function updateFilters(patch) {
+  const filters = { ...FILTER_DEFAULTS, ...store.get().filters, ...patch };
+  history.replaceState(null, '', explorerHref(filters, store.get().explorerSort));
+  store.set({ filters, explorerPage: 1 });
 }
 
 function preview(conv) {
@@ -55,7 +49,7 @@ function cardView(s, r, selected, busy) {
       </div>
       <p class="conv-preview">${preview(c)}</p>
       <div class="badges">
-        <span class="b ne">${c.language}</span>
+        <span class="b ne" title="Основной язык: ${c.language}">${c.languages?.length?c.languages.join(' + '):c.language}</span>${c.synthetic?html`<span class="b ne">Синтетический</span>`:''}
         <span class="b ne">${CHANNEL[c.channel] || c.channel}</span>
         <span class="b ${STATUS_TONE[r.status]}">${icon(STATUS_ICON[r.status])}<span>${STATUS[r.status]}</span></span>
         ${flag ? html`<span class="b rd">${icon('flag')}<span>Грубое нарушение</span></span>` : ''}
@@ -63,7 +57,7 @@ function cardView(s, r, selected, busy) {
       </div>
       ${trailView(versionTrail(s, c.conversation_id))}
     </div>
-    <div class="conv-score">
+    <div class="conv-score"><span class="sr">Итоговый балл</span>
       ${r.R ? html`${scoreRing(r.R.final.total, { key: r.ev.id, size: 'sm', label: `Итог ${c.conversation_id}` })}
         ${r.R.changed ? html`<span class="hint was" title="Исходная оценка">было ${fmtScore(r.ev.total)}</span>` : ''}`
         : html`<span class="ring-empty" aria-label="Не оценён">—</span>`}
@@ -72,27 +66,32 @@ function cardView(s, r, selected, busy) {
 }
 
 export function view(s) {
-  const f = s.filters;
+  const f = { ...FILTER_DEFAULTS, ...s.filters };
   const all = rowsFor(s);
-  const rows = all.filter((r) => matches(f, r));
+  const rows = sortRows(all.filter(r => matchesRow(f, r)), s.explorerSort);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const page = Math.min(Math.max(1, s.explorerPage || 1), pages);
+  const visible = rows.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
   const langs = [...new Set(s.conversations.map((c) => c.language))];
   const channels = [...new Set(s.conversations.map((c) => c.channel))];
   const selected = new Set((s.selectedConversations || []).filter((id) => s.conversations.some((c) => c.conversation_id === id)));
   const checklist = s.checklists.find((c) => c.id === s.batchChecklistId) || activeChecklist(s);
   const busy = !!s.applying || !!s.importing || Object.keys(s.running || {}).length > 0;
   const opt = (v, label, cur) => html`<option value="${v}" ${attr('selected', v === cur)}>${label}</option>`;
-  const filtered = f.q || f.language || f.channel || f.status;
+  const filtered = Object.values(f).some(Boolean);
+  const hiddenSelection = [...selected].filter(id=>!visible.some(r=>r.conv.conversation_id===id)).length;
+  const filterLabels = { q:`Поиск: ${f.q}`,language:LANG[f.language]||f.language,channel:CHANNEL[f.channel]||f.channel,status:STATUS[f.status]||(f.status==='flag'?'Грубое нарушение':''),quality:({low:'Ниже 60 баллов',attention:'60–<80 баллов',high:'80–100 баллов'})[f.quality],from:`С ${f.from}`,to:`По ${f.to}` };
 
   return html`
     <div class="page-head"><div><h2>Диалоги</h2>
-      <p class="sub">Откройте диалог, чтобы увидеть оценку, доказательства и оспорить результат.</p></div></div>
+      <p class="sub">Найдите разговор, проверьте оценку и откройте доказательства.</p></div></div>
     ${!config.USE_MOCK ? html`<form class="card row dataset-import" data-submit="dataset-import">
       <label for="dataset-group">Группа датасета</label>
       <input id="dataset-group" name="group_id" value="${s.datasetGroup || config.GROUP_ID || 'DEV'}" maxlength="128" required ${attr('disabled', busy)}>
       <button type="submit" class="p" ${attr('disabled', busy)}>${s.importing ? 'Загрузка…' : 'Загрузить группу'}</button>
       <span class="mu small">DEV или группа контрольного набора. Оценка запускается отдельно.</span>
     </form>` : ''}
-    <div class="filters card" role="search">
+    <div class="filters card" role="search" aria-label="Фильтры диалогов">
       <div class="search">${icon('search')}<label class="sr" for="f-q">Поиск</label>
         <input id="f-q" type="search" placeholder="Поиск по ID и тексту реплик" value="${f.q}" data-input="filter" data-key="q"></div>
       <label class="sr" for="f-lang">Язык</label>
@@ -101,9 +100,12 @@ export function view(s) {
       <select id="f-ch" data-change="filter" data-key="channel">${opt('', 'Чаты и звонки', f.channel)}${channels.map((c) => opt(c, CHANNEL[c] || c, f.channel))}</select>
       <label class="sr" for="f-st">Статус оценки</label>
       <select id="f-st" data-change="filter" data-key="status">${opt('', 'Любой статус', f.status)}${Object.entries(STATUS).map(([k, v]) => opt(k, v, f.status))}${opt('flag', 'С грубым нарушением', f.status)}</select>
-      ${filtered ? html`<button type="button" class="ghost" data-action="filter-reset">${icon('x')}Сбросить</button>` : ''}
+      <label class="sr" for="f-quality">Уровень качества</label><select id="f-quality" data-change="filter" data-key="quality">${opt('','Любой балл',f.quality)}${opt('low','Ниже 60',f.quality)}${opt('attention','60–<80',f.quality)}${opt('high','80–100',f.quality)}</select>
     </div>
-    <section class="card batch-controls" aria-label="Массовая оценка">
+    <div class="date-filters"><span>Дата последней оценки (UTC)</span><label for="f-from">С</label><input id="f-from" type="date" value="${f.from}" max="${f.to}" data-change="filter" data-key="from"><label for="f-to">По</label><input id="f-to" type="date" value="${f.to}" min="${f.from}" data-change="filter" data-key="to">${filtered?html`<button type="button" class="link" data-action="filter-reset">Сбросить всё</button>`:''}
+    </div>
+    ${filtered?html`<div class="active-filters" aria-label="Активные фильтры">${Object.keys(FILTER_DEFAULTS).filter(k=>f[k]).map(k=>html`<button type="button" class="filter-chip" data-action="filter-remove" data-key="${k}" aria-label="Убрать фильтр: ${filterLabels[k]}">${filterLabels[k]}${icon('x')}</button>`)}</div>`:''}
+    <section class="card batch-controls${s.applying ? ' is-evaluating' : ''}" aria-label="Массовая оценка">
       <div class="row">
         <label for="batch-checklist">Чек-лист для оценки</label>
         <select id="batch-checklist" data-change="batch-checklist" ${attr('disabled', busy)}>
@@ -118,12 +120,14 @@ export function view(s) {
         <progress max="${s.applying.total}" value="${s.applying.done}" aria-label="Прогресс оценки"></progress>` : ''}
       ${s.batchSummary ? html`<p role="status">Готово: ${s.batchSummary.ok} из ${s.batchSummary.total}. Ошибок: ${s.batchSummary.total - s.batchSummary.ok}.</p>` : ''}
     </section>
-    <label class="select-visible"><input id="select-visible" type="checkbox" data-change="select-visible" ${attr('checked', rows.length > 0 && rows.every((r) => selected.has(r.conv.conversation_id)))} ${attr('disabled', busy || !rows.length)}> Выбрать все показанные диалоги</label>
-    <p class="hint" aria-live="polite">Показано ${rows.length} из ${all.length}</p>
+    <div class="explorer-toolbar"><label class="select-visible"><input id="select-visible" type="checkbox" data-change="select-visible" ${attr('checked', visible.length > 0 && visible.every((r) => selected.has(r.conv.conversation_id)))} ${attr('disabled', busy || !visible.length)}> Выбрать страницу</label>
+    <p class="hint" aria-live="polite">${rows.length?`${(page-1)*PAGE_SIZE+1}–${Math.min(page*PAGE_SIZE,rows.length)} из ${rows.length}`:'0 результатов'}${filtered?` · в наборе ${all.length}`:''}</p><label class="sr" for="explorer-sort">Сортировка</label><select id="explorer-sort" data-change="explorer-sort">${opt('recent','Сначала последние оценки',s.explorerSort||'recent')}${opt('score-asc','Сначала низкие баллы',s.explorerSort)}${opt('score-desc','Сначала высокие баллы',s.explorerSort)}${opt('id','По ID диалога',s.explorerSort)}</select></div>
+    ${selected.size?html`<p class="selection-context" role="status">Выбрано ${selected.size}${hiddenSelection?` · вне текущей страницы: ${hiddenSelection}`:''}. Оценка применяется ко всем выбранным диалогам.</p>`:''}
     ${rows.length
-      ? html`<ul class="conv-list" aria-label="Список диалогов">${rows.map((r) => cardView(s, r, selected, busy))}</ul>`
+      ? html`<ul class="conv-list" aria-label="Список диалогов">${visible.map((r) => cardView(s, r, selected, busy))}</ul>`
       : html`<div class="card">${emptyState('search', 'Ничего не найдено', 'Нет диалогов под эти фильтры.',
-          filtered ? html`<button type="button" data-action="filter-reset">Сбросить фильтры</button>` : '')}</div>`}`;
+          filtered ? html`<button type="button" data-action="filter-reset">Сбросить фильтры</button>` : '')}</div>`}
+    ${pages>1?html`<nav class="pagination" aria-label="Страницы диалогов"><button type="button" data-action="explorer-page" data-page="${page-1}" ${attr('disabled',page===1)}>${icon('arrowLeft')}Назад</button><span>Страница ${page} из ${pages}</span><button type="button" data-action="explorer-page" data-page="${page+1}" ${attr('disabled',page===pages)}>Далее${icon('arrowRight')}</button></nav>`:''}`;
 }
 
 export const handlers = {
@@ -136,6 +140,7 @@ export const handlers = {
       try {
         const result = await api.importDataset(group);
         await loadAll();
+        updateFilters(FILTER_DEFAULTS);
         store.set({selectedConversations:[], batchSummary:null});
         toast(`Группа ${group}: загружено ${result.imported} из ${result.total}; пропущено ${result.skipped}`, 'ok');
       } catch (e) { toast(e.message, 'rd'); }
@@ -143,9 +148,10 @@ export const handlers = {
     },
   },
   input: {
-    filter(el) { store.set((s) => ({ filters: { ...s.filters, [el.dataset.key]: el.value } })); },
+    filter(el) { updateFilters({[el.dataset.key]:el.value}); },
   },
   change: {
+    'explorer-sort'(el) { history.replaceState(null,'',explorerHref(store.get().filters,el.value)); store.set({explorerSort:el.value,explorerPage:1}); },
     'batch-checklist'(el) { store.set({batchChecklistId:el.value}); },
     'select-conversation'(el) {
       if (store.get().applying) return;
@@ -157,18 +163,22 @@ export const handlers = {
       const s = store.get();
       if (s.applying) return;
       const selected = new Set(s.selectedConversations || []);
-      rowsFor(s).filter((r) => matches(s.filters,r)).forEach((r) => {
+      const sorted = sortRows(rowsFor(s).filter(r=>matchesRow(s.filters,r)),s.explorerSort);
+      const page = Math.min(Math.max(1,s.explorerPage||1),Math.max(1,Math.ceil(sorted.length/PAGE_SIZE)));
+      sorted.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE).forEach((r) => {
         if (el.checked) selected.add(r.conv.conversation_id); else selected.delete(r.conv.conversation_id);
       });
       store.set({selectedConversations:[...selected]});
     },
-    filter(el) { store.set((s) => ({ filters: { ...s.filters, [el.dataset.key]: el.value } })); },
+    filter(el) { updateFilters({[el.dataset.key]:el.value}); },
   },
   click: {
     'selection-clear'() { if (!store.get().applying) store.set({selectedConversations:[]}); },
     'evaluate-selected'() { return evaluateSelection(false); },
     'evaluate-all'() { return evaluateSelection(true); },
-    'filter-reset'() { store.set({ filters: { q: '', language: '', channel: '', status: '' } }); },
+    'filter-reset'() { updateFilters(FILTER_DEFAULTS); },
+    'filter-remove'(el) { updateFilters({[el.dataset.key]:''}); },
+    'explorer-page'(el) { store.set({explorerPage:Number(el.dataset.page)}); document.querySelector('.explorer-toolbar')?.scrollIntoView({block:'start'}); },
     'open-conv'(el, ev) {
       if (ev.target.closest('a,input,button,label,select')) return; // ссылка сама сменит hash
       location.hash = `#/conversations/${encodeURIComponent(el.dataset.id)}`;

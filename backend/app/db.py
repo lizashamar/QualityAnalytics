@@ -107,7 +107,6 @@ class Database:
         with self.write_lock, self.conn() as c:
             yield c
 
-    # ---------- схема ----------
     def migrate(self) -> None:
         with self.tx() as c:
             c.execute("PRAGMA journal_mode = WAL")
@@ -128,7 +127,6 @@ class Database:
                      seed.get("created_at") or now_iso(), dumps(seed["criteria"])),
                 )
 
-    # ---------- чек-листы ----------
     @staticmethod
     def _checklist(r: sqlite3.Row) -> dict:
         return {
@@ -178,7 +176,6 @@ class Database:
             c.execute("UPDATE checklists SET is_active = CASE WHEN id = ? THEN 1 ELSE 0 END", (cid,))
         return self.get_checklist(cid)
 
-    # ---------- диалоги ----------
     @staticmethod
     def _conversation(r: sqlite3.Row) -> dict:
         return {
@@ -213,7 +210,6 @@ class Database:
                 )
         return len(records)
 
-    # ---------- оценки ----------
     @staticmethod
     def _evaluation(r: sqlite3.Row) -> dict:
         return {
@@ -289,7 +285,6 @@ class Database:
     def update_evaluation_items(self, c: sqlite3.Connection, eid: int, items: list[dict]) -> None:
         c.execute("UPDATE evaluations SET items_json = ? WHERE id = ?", (dumps(items), eid))
 
-    # ---------- апелляции ----------
     @staticmethod
     def _appeal(r: sqlite3.Row) -> dict:
         return {

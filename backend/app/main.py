@@ -37,7 +37,6 @@ class UTF8JSONResponse(JSONResponse):
     media_type = "application/json; charset=utf-8"
 
 
-# ---------- модели запросов ----------
 class CriterionIn(BaseModel):
     @model_validator(mode="before")
     @classmethod
@@ -168,7 +167,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def saved_dialogues():
         return read_dataset(settings.dataset_file)["records"]
 
-    # --- диалоги ---
     @api.get("/conversations")
     def list_conversations(group_id: str | None = None):
         return db.list_conversations(group_id or None)
@@ -184,7 +182,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def import_dataset(body: ImportIn):
         return services.import_dataset(db, settings, body.group_id.strip())
 
-    # --- чек-листы ---
     @api.get("/checklists")
     def list_checklists():
         return db.list_checklists()
@@ -209,7 +206,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(404, f"Чек-лист «{checklist_id}» не найден")
         return cl
 
-    # --- оценки ---
     @api.post("/evaluations")
     def run_evaluation(body: EvaluationIn):
         return services.run_evaluation(db, settings, llm(), body.conversation_id, body.checklist_id)
@@ -266,7 +262,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(404, f"Задача «{job_id}» не найдена")
         return j
 
-    # --- апелляции ---
     @api.get("/appeals")
     def list_appeals():
         return [services.appeal_out(a) for a in db.list_appeals()]

@@ -1,5 +1,3 @@
-// Чек-листы: список версий, редактор (каждое сохранение = новая версия) и «Применить к диалогам».
-
 import { html, attr } from '../html.js';
 import { store } from '../store.js';
 import { validateChecklist, round2 } from '../scoring.js';
@@ -24,7 +22,6 @@ export function scaleMode(c) {
   return 'scale';
 }
 
-// ---------- список ----------
 export function listView(s) {
   const fams = [];
   for (const c of s.checklists) {
@@ -43,15 +40,15 @@ export function listView(s) {
         <a class="btn p" href="#/checklists/new/edit">${icon('plus')}Новый чек-лист</a></div></div>
     ${fams.map((f) => html`<section class="card mb" aria-label="${f.versions[0].name}">
       <div class="card-head"><h3>${icon('doc')}${f.versions[0].name}</h3><span class="hint">${f.versions.length} верс.</span></div>
-      <div class="tw"><table class="table"><thead><tr><th scope="col">Версия</th><th scope="col">Критериев</th><th scope="col">Создана</th><th scope="col">Статус</th><th scope="col"><span class="sr">Действия</span></th></tr></thead><tbody>
+      <div class="tw" tabindex="0" role="region" aria-label="Версии чек-листа ${f.versions[0].name}. Таблица прокручивается по горизонтали."><table class="table"><thead><tr><th scope="col">Версия</th><th scope="col">Критериев</th><th scope="col">Создана</th><th scope="col">Статус</th><th scope="col"><span class="sr">Действия</span></th></tr></thead><tbody>
       ${f.versions.map((v) => html`<tr>
         <td><b>v${v.version}</b></td><td>${v.criteria.length}</td><td>${fmtDate(v.created_at)}</td>
         <td>${v.active ? html`<span class="b ok">${icon('check')}<span>Активная</span></span>` : html`<span class="hint">—</span>`}</td>
-        <td class="row end">
+        <td><div class="row end">
           ${s.checklists.length > 1 ? html`<button type="button" class="btn-sm" data-action="compare-open" data-id="${v.id}" aria-label="Сравнить версию ${v.version} с другой">${icon('scale')}Сравнить с…</button>` : ''}
           ${v.active ? '' : html`<button type="button" data-action="cl-activate" data-id="${v.id}">Сделать активной</button>`}
           <a class="btn" href="#/checklists/${encodeURIComponent(v.id)}/edit">Изменить (новая версия)</a>
-        </td></tr>`)}
+        </div></td></tr>`)}
       </tbody></table></div>
     </section>`)}`;
 }
@@ -79,8 +76,8 @@ function reevalPanel(s) {
   const avg = avgCost(s);
   const busy = !!s.applying;
   const done = o.done;
-  const radio = (mode, label, count, extra = '') => html`<label class="opt"><input type="radio" name="reeval-mode" value="${mode}" data-change="reeval-mode" ${attr('checked', o.mode === mode)} ${attr('disabled', busy)}>
-    <span>${label}</span><span class="hint">${count} диал.</span>${extra}</label>`;
+  const radio = (mode, label, count) => html`<label class="opt"><input type="radio" name="reeval-mode" value="${mode}" data-change="reeval-mode" ${attr('checked', o.mode === mode)} ${attr('disabled', busy)}>
+    <span>${label}</span><span class="hint">${count} диал.</span></label>`;
   return html`<section class="notice ok reeval" role="region" aria-labelledby="reeval-h">
     ${icon('check')}
     <div class="grow">
@@ -91,8 +88,8 @@ function reevalPanel(s) {
       : html`<fieldset ${attr('disabled', busy)}><legend class="sr">Какие диалоги переоценить</legend>
           ${o.baseId ? radio('previous', `Все ранее оценённые по v${o.baseVersion}`, reevalIds(s, { ...o, mode: 'previous' }).length) : ''}
           ${radio('selected', 'Выбранные в списке диалогов', reevalIds(s, { ...o, mode: 'selected' }).length)}
-          ${radio('first', 'Первые N', reevalIds(s, { ...o, mode: 'first' }).length,
-            html`<label class="sr" for="reeval-n">N</label><input id="reeval-n" type="number" min="1" max="${s.conversations.length}" value="${o.n}" data-input="reeval-n" class="num">`)}
+          ${radio('first', 'Первые N', reevalIds(s, { ...o, mode: 'first' }).length)}
+          <div class="row"><label class="inline" for="reeval-n">Количество диалогов (N)</label><input id="reeval-n" type="number" min="1" max="${s.conversations.length}" value="${o.n}" data-input="reeval-n" class="num"></div>
         </fieldset>
         <p class="hint">Будет оценено <b>${ids.length}</b> диал. чек-листом v${o.version}.
           ${avg != null ? html`Ориентировочная стоимость: <b>$${(avg * ids.length).toFixed(4)}</b> (средняя цена прошлой оценки $${avg.toFixed(4)}).` : 'Стоимость неизвестна: цены модели не заданы.'}</p>
@@ -117,9 +114,10 @@ export function editorView(s) {
   return html`
     <a href="#/checklists" class="back">${icon('arrowLeft')}К чек-листам</a>
     <div class="page-head"><div>
-      <h2>${d.based_on ? `Изменение: ${d.name} (v${d.baseVersion} → новая версия)` : 'Новый чек-лист'}</h2>
-      <p class="sub">Критерии, секции, веса и шкалы задаются здесь и сразу используются интерфейсом и оценкой.</p></div></div>
-    <section class="card">
+      <h2>${d.based_on ? 'Редактирование чек-листа' : 'Новый чек-лист'}</h2>
+      <p class="sub">${d.based_on?`На основе v${d.baseVersion}. `:''}Изменения сохранятся как новая версия. Существующие оценки сохранят свою методику.</p></div></div>
+    <section class="card editor-identity">
+
       <label for="ed-name">Название</label><input id="ed-name" value="${d.name}" data-input="draft-field" data-key="name">
       <label for="ed-desc">Описание</label><input id="ed-desc" value="${d.description}" data-input="draft-field" data-key="description">
     </section>
@@ -131,38 +129,39 @@ export function editorView(s) {
       ${d.criteria.map((c, i) => {
         const sec = c.section !== lastSection ? html`<li class="group" aria-hidden="true">${c.section}</li>` : '';
         lastSection = c.section;
-        return html`${sec}<li class="ed-item">
-          <div><b>${i + 1}. ${c.title || 'Без названия'}</b>
+        return html`${sec}<li class="ed-item" data-criterion-index="${i}">
+          <button type="button" class="drag-handle" draggable="true" data-drag-criterion="${i}" aria-label="Перетащить критерий ${i + 1}" title="Перетащите или используйте стрелки">⠿</button>
+          <div class="criterion-copy"><b>${i + 1}. ${c.title || 'Без названия'}</b>
             <div class="mu small">${c.is_flag ? 'флаг грубого нарушения, без баллов' : `${TYPE[c.type]}${c.type === 'scale' ? ' ' + c.scale_steps.join('/') : ''} · вес ${c.weight}`}${c.allow_na ? ' · N/A разрешён' : ''} · id ${c.id}</div>
             <div class="mu small">${c.question}</div></div>
+          <div class="criterion-controls">${!c.is_flag ? html`<label class="inline-weight">Вес<input type="number" min="0.01" max="100" step="any" data-change="criterion-weight" data-i="${i}" value="${c.weight}" aria-label="Вес критерия ${c.title}"></label>` : html`<span class="flag-label">${icon('flag')}Без баллов</span>`}
           <div class="ed-actions">
             <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="-1" aria-label="Переместить «${c.title}» выше" title="Выше" ${attr('disabled', i === 0)}>${icon('up')}</button>
             <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="1" aria-label="Переместить «${c.title}» ниже" title="Ниже" ${attr('disabled', i === d.criteria.length - 1)}>${icon('down')}</button>
-            <button type="button" class="btn-sm" data-action="cr-edit" data-i="${i}">${icon('edit')}Изменить</button>
+            <button type="button" class="btn-sm" data-action="cr-edit" data-i="${i}" aria-label="Изменить критерий «${c.title}»">${icon('edit')}<span class="edit-label">Изменить</span></button>
             <button type="button" class="btn-sm d" data-action="cr-delete" data-i="${i}" aria-label="Удалить критерий «${c.title}»" title="Удалить">${icon('trash')}<span class="btn-label">Удалить</span></button>
-          </div></li>`;
+          </div></div></li>`;
       })}
       </ol>
       <button type="button" class="ghost add" data-action="cr-edit" data-i="-1">${icon('plus')}Добавить критерий</button>
     </section>
-    <section class="card mt">
+    <section class="card mt editor-save">
       ${ok ? html`<p class="notice ok">${icon('check')}<span>Чек-лист корректен</span></p>` : html`<div class="notice rd errors" role="alert">${icon('alert')}<div><b>Исправьте перед сохранением:</b><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div></div>`}
       <label class="check"><input type="checkbox" id="ed-activate" data-change="draft-activate" ${attr('checked', d.activate)}> Сделать новую версию активной</label>
       <div class="row end">
         <a class="btn" href="#/checklists">Отмена</a>
-        <button type="button" class="p" data-action="draft-save" ${attr('disabled', !ok || d.busy)} aria-describedby="save-hint">Сохранить как новую версию</button>
+        <button type="button" class="p" data-action="draft-save" ${attr('disabled', !ok || d.busy)} aria-describedby="save-hint">${d.busy?'Сохраняем…':'Сохранить как новую версию'}</button>
       </div>
       <p id="save-hint" class="mu small">Существующие оценки останутся привязаны к своей версии чек-листа.</p>
     </section>`;
 }
 
-// ---------- модальное окно критерия ----------
 export function criterionModalView(s, m) {
   const c = m.c;
   const sections = [...new Set(s.draft.criteria.map((x) => x.section).filter(Boolean))];
   const steps = c.scale_steps.length ? c.scale_steps : [];
   return html`<form data-submit="criterion" novalidate aria-labelledby="cm-h" id="cm-form">
-    <h3 id="cm-h">${m.index < 0 ? 'Новый критерий' : 'Изменить критерий'}</h3>
+    <div class="dialog-head"><h3 id="cm-h">${m.index < 0 ? 'Новый критерий' : 'Изменить критерий'}</h3><button type="button" class="icon-btn ghost" data-action="modal-close" aria-label="Закрыть редактор критерия">${icon('x')}</button></div>
     <label for="cm-id">ID критерия</label><input id="cm-id" value="${c.id}" required>
     <label for="cm-title">Название</label><input id="cm-title" value="${c.title}" required>
     <label for="cm-section">Секция</label><input id="cm-section" list="cm-sections" value="${c.section}" required>
@@ -220,8 +219,8 @@ function readCriterionForm(base) {
       const lb = $(`cm-label-${i}`).value.trim();
       if (Number.isFinite(v) && lb) labels[v] = lb;
     });
-    c.scale_steps = steps;
-    c.scale_labels = labels;
+    c.scale_steps = steps.length ? steps : [...(base.scale_steps||[])];
+    c.scale_labels = steps.length ? labels : {...base.scale_labels};
   }
   return c;
 }
@@ -231,7 +230,6 @@ function rerender(patch = (c) => c, error = null) {
   store.set({ modal: { ...m, c: patch(readCriterionForm(m.c)), error } });
 }
 
-// ---------- «Применить к диалогам» ----------
 export function applyModalView(s, m) {
   const act = activeChecklist(s);
   const sel = new Set(m.selected);
@@ -256,6 +254,11 @@ export const handlers = {
   },
   change: {
     'reeval-mode'(el) { const o = store.get().reevalOffer; if (o) store.set({ reevalOffer: { ...o, mode: el.value } }); },
+    'criterion-weight'(el) {
+      const d=store.get().draft, i=Number(el.dataset.i), value=Number(el.value);
+      if(!d||!d.criteria[i]||!Number.isFinite(value))return;
+      store.set({draft:{...d,criteria:d.criteria.map((c,k)=>k===i?{...c,weight:value}:c)}});
+    },
     'draft-activate'(el) { store.get().draft.activate = el.checked; },
     'cm-rerender'() { rerender(); },
     'apply-all'(el) {

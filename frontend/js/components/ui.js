@@ -1,4 +1,3 @@
-// Общие визуальные элементы: круговой индикатор итога, шкала доли, пустое состояние, скелетон.
 import { html, attr } from '../html.js';
 import { icon } from '../icons.js';
 import { scoreTone, fmtScore, TONE_LABEL } from '../results.js';

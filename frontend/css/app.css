@@ -1,51 +1,78 @@
-/* CQA · Анализ качества диалогов.
-   Цвета — фирменные Freedom (bankffin.kz, [data-theme] в build/assets/*.css):
-   accent-green #4FB84E, middle-green #2A8640, dark-green #055532, light-green #DDF6CE,
-   black #191919, dark-grey #282828, grey #F5F6F7, grey-stroke #D1D1D1, red #CD464B/#FB5555, yellow #EEBB08/#FBD655.
-   Структура и стиль — по awesome-design-md/design-md/stripe/DESIGN.md (без его цветов):
-   тонкая display-типографика с отрицательным трекингом, ss01 глобально и tnum на числах, база 8px,
-   контейнер ~1200px, скругления 4/6/8/12/16/pill, тени уровней 1–2, кнопки-пилюли 8×16, теги-пилюли,
-   eyebrow-подписи капителью, атмосферная «mesh»-полоса вверху страницы (в зелёных тонах Freedom).
-   Все правила ограничены корнем .cqa-app; на :root только переменные --cqa-*. */
+/* CoFo Sans webfonts used by https://bankffin.kz/ru; served locally. */
+@font-face {
+  font-family: "CoFoSans";
+  src: url("../fonts/CoFoSans-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "CoFoSans";
+  src: url("../fonts/CoFoSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "CoFoSans";
+  src: url("../fonts/CoFoSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "CoFoSans";
+  src: url("../fonts/CoFoSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "CoFoSans";
+  src: url("../fonts/CoFoSans-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
 
 :root {
-  /* бренд Freedom */
+
   --cqa-brand: #4FB84E;
-  --cqa-brand-strong: #2A8640;   /* фон основной кнопки: белый текст 4.6:1 */
-  --cqa-brand-hover: #055532;    /* hover / pressed */
+  --cqa-brand-strong: #2A8640;
+  --cqa-brand-hover: #055532;
   --cqa-brand-soft: #DDF6CE;
   --cqa-brand-tint: #EEF8E9;
   --cqa-on-brand: #FFFFFF;
   --cqa-link: #22703A;
   --cqa-focus: #2A8640;
-  /* нейтральные */
+
   --cqa-bg: #F5F6F7;
   --cqa-surface: #FFFFFF;
   --cqa-surface-2: #F0F2F3;
   --cqa-text: #191919;
   --cqa-text-2: #3A3D3F;
   --cqa-muted: #5C5C5C;
-  --cqa-border: #E2E5E7;          /* hairline карточек и таблиц */
-  --cqa-border-strong: #8A8F92;   /* поля ввода: граница ≥ 3:1 */
-  /* «mesh»-полоса вверху страницы — только цвета Freedom, очень мягко */
+  --cqa-border: #E2E5E7;
+  --cqa-border-strong: #8A8F92;
+
   --cqa-mesh:
     radial-gradient(55% 140% at 8% 0%, rgba(79, 184, 78, .20) 0%, rgba(79, 184, 78, 0) 62%),
     radial-gradient(45% 120% at 92% 0%, rgba(238, 187, 8, .13) 0%, rgba(238, 187, 8, 0) 60%),
     radial-gradient(40% 110% at 52% 0%, rgba(221, 246, 206, .85) 0%, rgba(221, 246, 206, 0) 70%);
-  /* семантика баллов — отдельно от бренда, всегда с иконкой и текстом */
+
   --cqa-ok-fg: #1C6B3A;  --cqa-ok-bg: #E3F3E6;  --cqa-ok-bar: #2E9D57;
   --cqa-wn-fg: #7A5300;  --cqa-wn-bg: #FDF1CF;  --cqa-wn-bar: #E0A800;
   --cqa-rd-fg: #A3262E;  --cqa-rd-bg: #FBE7E8;  --cqa-rd-bar: #CD464B;
   --cqa-ne-fg: #4A4F52;  --cqa-ne-bg: #EEF0F1;  --cqa-ne-bar: #B7BBBD;
   --cqa-ac-fg: #1D5C93;  --cqa-ac-bg: #E4EFFA;
   --cqa-hl-bg: #FFF4D2;  --cqa-hl-line: #E0A800;  --cqa-flash: #FFE08A;
-  /* форма (stripe DESIGN.md: rounded, elevation, spacing) */
+
   --cqa-r-xs: 4px; --cqa-r-sm: 6px; --cqa-r-md: 8px; --cqa-r-lg: 12px; --cqa-r-xl: 16px; --cqa-r-pill: 9999px;
   --cqa-shadow-1: 0 1px 3px rgba(25, 25, 25, .08);
   --cqa-shadow-2: 0 8px 24px rgba(25, 25, 25, .08), 0 2px 6px rgba(25, 25, 25, .04);
   --cqa-shadow-3: 0 18px 48px rgba(25, 25, 25, .16), 0 4px 12px rgba(25, 25, 25, .06);
   --cqa-s-1: 4px; --cqa-s-2: 8px; --cqa-s-3: 12px; --cqa-s-4: 16px; --cqa-s-5: 24px; --cqa-s-6: 32px; --cqa-s-7: 64px;
-  --cqa-font: "Inter", "SF Pro Display", "Segoe UI", Roboto, "Noto Sans", "PT Sans", system-ui, sans-serif;
+  --cqa-font: "CoFoSans", "Segoe UI", Roboto, "Noto Sans", "PT Sans", system-ui, sans-serif;
   --cqa-ease: 170ms cubic-bezier(.2, .7, .3, 1);
 }
 
@@ -93,7 +120,6 @@
 }
 .cqa-app[data-theme="light"] { color-scheme: light; }
 
-/* ---------- основа и типографика ---------- */
 .cqa-app, .cqa-app *, .cqa-app *::before, .cqa-app *::after { box-sizing: border-box; }
 .cqa-app {
   min-height: 100vh; color: var(--cqa-text);
@@ -101,17 +127,17 @@
   font: 400 15px/1.4 var(--cqa-font); font-feature-settings: "ss01"; -webkit-font-smoothing: antialiased;
   display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-/* display-md: 26 / 300 / -0.26px */
+
 .cqa-app h2 { font-size: 26px; font-weight: 300; line-height: 1.12; letter-spacing: -.26px; margin: 0 0 var(--cqa-s-2); overflow-wrap: anywhere; }
 .cqa-app h2:focus { outline: none; }
-/* heading-sm: 18 / 300 */
+
 .cqa-app h3 { font-size: 18px; font-weight: 400; line-height: 1.3; letter-spacing: -.1px; margin: 0 0 var(--cqa-s-3); display: flex; align-items: center; gap: var(--cqa-s-2); }
-/* body-lg для названий критериев */
+
 .cqa-app h4 { font-size: 16px; font-weight: 500; line-height: 1.35; margin: 0; }
 .cqa-app p { margin: 0 0 var(--cqa-s-2); }
 .cqa-app b, .cqa-app strong { font-weight: 600; }
 .cqa-app code { font-size: 13px; background: var(--cqa-surface-2); padding: 1px 6px; border-radius: var(--cqa-r-xs); }
-/* ссылки: без подчёркивания у самостоятельных, с подчёркиванием внутри текста (не только цветом) */
+
 .cqa-app a { color: var(--cqa-link); text-decoration: none; text-underline-offset: 3px; }
 .cqa-app a:hover, .cqa-app p a, .cqa-app .sub a { text-decoration: underline; }
 .cqa-app .ic { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
@@ -121,7 +147,7 @@
 .cqa-app .skip { position: absolute; left: 12px; top: -56px; z-index: 60; }
 .cqa-app .skip:focus { top: 12px; }
 .cqa-app .hint, .cqa-app .mu, .cqa-app .sub { color: var(--cqa-muted); }
-/* caption: 13 / 400 */
+
 .cqa-app .hint, .cqa-app .small { font-size: 13px; letter-spacing: -.1px; }
 .cqa-app .sub { margin: 0; font-size: 15px; }
 .cqa-app .center { text-align: center; }
@@ -132,17 +158,16 @@
 .cqa-app .end { justify-content: flex-end; }
 .cqa-app .grow { flex: 1; min-width: 0; }
 .cqa-app .t-rd { color: var(--cqa-rd-fg); } .cqa-app .t-wn { color: var(--cqa-wn-fg); } .cqa-app .t-ok { color: var(--cqa-ok-fg); } .cqa-app .t-ne { color: var(--cqa-ne-fg); }
-/* tnum: все числа — баллы, проценты, метки времени, счётчики */
+
 .cqa-app .big, .cqa-app .pts, .cqa-app .sec-val, .cqa-app .ring-center, .cqa-app .msg .meta, .cqa-app .bar-val,
 .cqa-app .tabs .count, .cqa-app .table td, .cqa-app .delta, .cqa-app .was, .cqa-app .weight, .cqa-app .seek, .cqa-app .chip,
 .cqa-app .step .big, .cqa-app .hint { font-variant-numeric: tabular-nums; font-feature-settings: "ss01", "tnum"; }
-/* eyebrow / micro-cap */
+
 .cqa-app .step-lbl, .cqa-app .group, .cqa-app .hero-body h3, .cqa-app .table th, .cqa-app .kpi-l, .cqa-app .layers .lbl,
 .cqa-app .msg .meta .role, .cqa-app .evid-label, .cqa-app .eyebrow {
   font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; line-height: 1.2; color: var(--cqa-muted);
 }
 
-/* ---------- шапка: название · вкладки · действия (nav-bar) ---------- */
 .cqa-app .cqa-header {
   position: sticky; top: 0; z-index: 20; background: var(--cqa-surface);
   border-bottom: 1px solid var(--cqa-border); box-shadow: var(--cqa-shadow-1);
@@ -170,14 +195,12 @@
   background: var(--cqa-wn-bg); color: var(--cqa-wn-fg); border: 1px solid var(--cqa-wn-bar);
 }
 
-/* ---------- контейнер (~1200px), отступы продуктовых экранов 32–48px ---------- */
 .cqa-app .cqa-main { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: var(--cqa-s-6) var(--cqa-s-5) var(--cqa-s-7); min-width: 0; }
 .cqa-app .cqa-main:focus { outline: none; }
 .cqa-app .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--cqa-s-4); flex-wrap: wrap; margin-bottom: var(--cqa-s-5); }
 .cqa-app .page-head h2 { display: flex; align-items: center; gap: var(--cqa-s-3); flex-wrap: wrap; }
 .cqa-app .back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: var(--cqa-s-3); font-size: 14px; }
 
-/* ---------- карточки (card-feature-light / card-dashboard-mockup) ---------- */
 .cqa-app .card { background: var(--cqa-surface); border: 1px solid var(--cqa-border); border-radius: var(--cqa-r-lg); padding: var(--cqa-s-5); box-shadow: var(--cqa-shadow-1); min-width: 0; }
 .cqa-app .card-head { display: flex; justify-content: space-between; align-items: center; gap: var(--cqa-s-3); flex-wrap: wrap; margin-bottom: var(--cqa-s-3); }
 .cqa-app .card-head h3 { margin: 0; }
@@ -185,7 +208,6 @@
 .cqa-app .grid2 { display: grid; gap: var(--cqa-s-5); grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cqa-app .tw { overflow-x: auto; }
 
-/* ---------- кнопки-пилюли (button-primary-pill / button-secondary), поля ---------- */
 .cqa-app button, .cqa-app .btn {
   font: inherit; font-size: 15px; font-weight: 400; line-height: 1; letter-spacing: 0;
   color: var(--cqa-link); background: var(--cqa-surface); border: 1px solid var(--cqa-brand-strong);
@@ -202,13 +224,13 @@
 .cqa-app button.d:hover:not(:disabled) { background: var(--cqa-rd-bg); }
 .cqa-app button.ghost { border-color: transparent; background: transparent; }
 .cqa-app button.ghost:hover:not(:disabled) { background: var(--cqa-brand-tint); }
-/* button-sm: 14px, отступы не меньше 8×16 */
+
 .cqa-app .btn-sm { font-size: 14px; min-height: 32px; padding: 8px 16px; }
 .cqa-app .icon-btn { width: 40px; min-width: 40px; padding: 0; color: var(--cqa-text-2); border-color: var(--cqa-border-strong); }
 .cqa-app .icon-btn .ic { width: 18px; height: 18px; }
 .cqa-app button.link { background: none; border: 0; padding: 0; min-height: 0; color: var(--cqa-link); text-decoration: underline; }
 .cqa-app button.add { margin-top: var(--cqa-s-3); }
-/* text-input: 6px, 8×12, граница → бренд при фокусе */
+
 .cqa-app select, .cqa-app input, .cqa-app textarea {
   font: inherit; font-size: 15px; color: var(--cqa-text); background: var(--cqa-surface);
   border: 1px solid var(--cqa-border-strong); border-radius: var(--cqa-r-sm); padding: 8px 12px; min-height: 40px;
@@ -231,7 +253,6 @@
 .cqa-app .step { margin: 6px 0; flex-wrap: nowrap; }
 .cqa-app .step .num { width: 88px; flex: none; }
 
-/* ---------- бейджи-пилюли (pill-tag-soft) и уведомления ---------- */
 .cqa-app .b {
   display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: var(--cqa-r-pill);
   font-size: 12.5px; font-weight: 500; line-height: 1.2; white-space: nowrap; text-decoration: none; border: 1px solid transparent;
@@ -252,7 +273,6 @@
 .cqa-app .notice.rd { background: var(--cqa-rd-bg); color: var(--cqa-rd-fg); }
 .cqa-app .notice ul { margin: 4px 0 0; padding-left: 18px; }
 
-/* ---------- пустые состояния, скелетоны, прогресс ---------- */
 .cqa-app .empty { text-align: center; padding: var(--cqa-s-6) var(--cqa-s-3); color: var(--cqa-muted); display: flex; flex-direction: column; align-items: center; gap: var(--cqa-s-2); }
 .cqa-app .empty .ic-lg { color: var(--cqa-border-strong); }
 .cqa-app .empty h3 { color: var(--cqa-text); margin: 6px 0 0; justify-content: center; font-weight: 300; font-size: 20px; }
@@ -265,7 +285,6 @@
 .cqa-app .progress i { display: block; height: 100%; width: 35%; background: var(--cqa-brand); border-radius: var(--cqa-r-pill); animation: cqa-indeterminate 1.2s ease-in-out infinite; }
 @keyframes cqa-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 
-/* ---------- круговой индикатор и шкалы ---------- */
 .cqa-app .ring { position: relative; flex: none; --tone: var(--cqa-ne-bar); }
 .cqa-app .ring.t-ok { --tone: var(--cqa-ok-bar); } .cqa-app .ring.t-wn { --tone: var(--cqa-wn-bar); } .cqa-app .ring.t-rd { --tone: var(--cqa-rd-bar); }
 .cqa-app .ring-lg { width: 148px; height: 148px; }
@@ -277,7 +296,7 @@
 .cqa-app .ring-anim { animation: cqa-ring 1000ms cubic-bezier(.2, .7, .2, 1) both; }
 @keyframes cqa-ring { from { stroke-dashoffset: var(--ring-from); } to { stroke-dashoffset: var(--ring-to); } }
 .cqa-app .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
-/* display-lg: 32–36 / 300 / отрицательный трекинг */
+
 .cqa-app .ring-lg .ring-center b { font-size: 36px; font-weight: 300; letter-spacing: -.9px; }
 .cqa-app .ring-lg .ring-center span { font-size: 12px; color: var(--cqa-muted); margin-top: 2px; }
 .cqa-app .ring-sm .ring-center b { font-size: 13px; font-weight: 500; letter-spacing: -.3px; }
@@ -288,9 +307,8 @@
 .cqa-app .meter.t-brand { --tone: var(--cqa-brand); }
 .cqa-app .meter i { display: block; height: 100%; background: var(--tone); border-radius: var(--cqa-r-pill); transition: width 450ms cubic-bezier(.2, .7, .3, 1); }
 
-/* ---------- список диалогов: сетка 3 → 2 → 1 ---------- */
 .cqa-app .filters { display: flex; flex-wrap: wrap; gap: var(--cqa-s-3); align-items: center; padding: var(--cqa-s-3); margin-bottom: var(--cqa-s-3); }
-.cqa-app .filters select, .cqa-app .run select { flex: 0 1 auto; width: auto; } /* перебивает label + select { width: 100% } — перед полями стоят скрытые label.sr */
+.cqa-app .filters select, .cqa-app .run select { flex: 0 1 auto; width: auto; }
 .cqa-app .search { position: relative; flex: 1 1 260px; min-width: 0; }
 .cqa-app .search .ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--cqa-muted); pointer-events: none; }
 .cqa-app .search input { width: 100%; padding-left: 36px; }
@@ -312,7 +330,6 @@
 .cqa-app .conv-score { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
 .cqa-app .was { font-size: 12px; color: var(--cqa-muted); }
 
-/* ---------- карточка диалога ---------- */
 .cqa-app .run { display: flex; gap: var(--cqa-s-2); align-items: center; flex-wrap: wrap; }
 .cqa-app .run label { margin: 0; }
 .cqa-app .run select { max-width: 320px; }
@@ -326,7 +343,6 @@
 .cqa-app .audio audio { width: 100%; }
 .cqa-app .audio .hint { margin: 4px 0 0; }
 
-/* транскрипт: пузыри */
 .cqa-app .transcript { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cqa-s-2); }
 .cqa-app .msg { display: flex; scroll-margin: 140px; position: relative; }
 .cqa-app .msg .bubble { max-width: 86%; padding: 10px 14px; border-radius: var(--cqa-r-xl); border: 1px solid var(--cqa-border); background: var(--cqa-surface-2); transition: background var(--cqa-ease), box-shadow var(--cqa-ease); }
@@ -354,14 +370,12 @@
 .cqa-app .msg:focus-visible .bubble { outline: 2px solid var(--cqa-focus); outline-offset: 2px; }
 .cqa-app .transcript-card .transcript { padding-left: var(--cqa-s-3); }
 
-/* оценка: баннер грубого нарушения */
 .cqa-app .gross { display: flex; gap: var(--cqa-s-4); align-items: flex-start; background: var(--cqa-rd-bg); border: 1px solid var(--cqa-rd-bar); border-radius: var(--cqa-r-lg); padding: var(--cqa-s-5); color: var(--cqa-rd-fg); box-shadow: inset 6px 0 0 var(--cqa-rd-bar), var(--cqa-shadow-1); }
 .cqa-app .gross h3 { color: var(--cqa-rd-fg); margin: 0 0 var(--cqa-s-2); font-size: 20px; font-weight: 400; letter-spacing: -.2px; }
 .cqa-app .gross p { color: var(--cqa-text); }
 .cqa-app .gross .gross-note { color: var(--cqa-rd-fg); font-size: 13px; margin: var(--cqa-s-2) 0 0; }
 .cqa-app .chip.on-danger { border-color: var(--cqa-rd-bar); color: var(--cqa-rd-fg); }
 
-/* оценка: итог (card-dashboard-mockup, level 2) */
 .cqa-app .hero { display: grid; grid-template-columns: auto 1fr; gap: var(--cqa-s-2) var(--cqa-s-5); align-items: center; box-shadow: var(--cqa-shadow-2); border-radius: var(--cqa-r-xl); }
 .cqa-app .hero-body h3 { margin: 0 0 var(--cqa-s-2); }
 .cqa-app .hero-body .hint { margin: 0 0 2px; }
@@ -379,14 +393,12 @@
 .cqa-app .change .ic { width: 13px; height: 13px; color: var(--cqa-muted); }
 .cqa-app .delta { font-size: 13px; font-weight: 500; color: var(--cqa-muted); }
 
-/* оценка: секции */
 .cqa-app .sections { display: flex; flex-direction: column; gap: var(--cqa-s-4); }
 .cqa-app .sec-head { display: flex; justify-content: space-between; gap: var(--cqa-s-3); align-items: baseline; flex-wrap: wrap; margin-bottom: var(--cqa-s-2); }
 .cqa-app .sec-name { font-weight: 400; }
 .cqa-app .sec-val { display: inline-flex; gap: var(--cqa-s-2); align-items: baseline; flex-wrap: wrap; font-size: 13px; color: var(--cqa-muted); }
 .cqa-app .sec-val b { font-size: 16px; font-weight: 500; letter-spacing: -.3px; }
 
-/* оценка: критерии */
 .cqa-app .group { margin: var(--cqa-s-5) 0 var(--cqa-s-1); }
 .cqa-app .crit { padding: var(--cqa-s-4) 0; border-bottom: 1px solid var(--cqa-border); }
 .cqa-app .crit:last-child { border-bottom: 0; }
@@ -414,7 +426,6 @@
 .cqa-app .layers .lbl { min-width: 170px; }
 .cqa-app .reason { font-style: italic; overflow-wrap: anywhere; }
 
-/* апелляции */
 .cqa-app .seg { display: inline-flex; gap: var(--cqa-s-1); padding: var(--cqa-s-1); border-radius: var(--cqa-r-pill); background: var(--cqa-surface-2); margin-bottom: var(--cqa-s-4); flex-wrap: wrap; }
 .cqa-app .seg .tab { border-color: transparent; background: transparent; min-height: 34px; color: var(--cqa-text-2); font-size: 14px; }
 .cqa-app .seg .tab:hover:not(:disabled) { background: var(--cqa-surface); }
@@ -423,7 +434,7 @@
 .cqa-app .table th { text-align: left; }
 .cqa-app .table td, .cqa-app .table th { padding: var(--cqa-s-3); border-bottom: 1px solid var(--cqa-border); vertical-align: top; }
 .cqa-app .table td { font-size: 14px; }
-.cqa-app .table td a { white-space: nowrap; } /* ID диалога не рвётся по дефису */
+.cqa-app .table td a { white-space: nowrap; }
 .cqa-app .table tr:last-child td { border-bottom: 0; }
 .cqa-app .table tbody tr { transition: background var(--cqa-ease); }
 .cqa-app .table tbody tr:hover { background: var(--cqa-surface-2); }
@@ -436,7 +447,6 @@
 .cqa-app label.opt:has(input:checked) { border-color: var(--cqa-brand-strong); background: var(--cqa-brand-tint); box-shadow: 0 0 0 1px var(--cqa-brand-strong); }
 .cqa-app .preview { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; background: var(--cqa-brand-tint); border: 1px solid var(--cqa-brand-soft); padding: var(--cqa-s-3) var(--cqa-s-4); border-radius: var(--cqa-r-md); font-variant-numeric: tabular-nums; }
 
-/* редактор чек-листа */
 .cqa-app .ed-list { list-style: none; margin: var(--cqa-s-3) 0; padding: 0; }
 .cqa-app .ed-list .group { list-style: none; }
 .cqa-app .ed-item { display: flex; justify-content: space-between; gap: var(--cqa-s-3); padding: var(--cqa-s-3) var(--cqa-s-4); margin: var(--cqa-s-2) 0; border: 1px solid var(--cqa-border); border-radius: var(--cqa-r-md); flex-wrap: wrap; background: var(--cqa-surface); transition: border-color var(--cqa-ease), box-shadow var(--cqa-ease); }
@@ -447,7 +457,6 @@
 .cqa-app .ed-actions .icon-btn { width: 32px; min-width: 32px; min-height: 32px; }
 .cqa-app .card > .meter { margin: 4px 0 var(--cqa-s-2); }
 
-/* обзор */
 .cqa-app .kpis { display: grid; gap: var(--cqa-s-4); grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .cqa-app .kpi { display: flex; flex-direction: column; gap: var(--cqa-s-2); }
 .cqa-app .kpi-ring { flex-direction: row; align-items: center; gap: var(--cqa-s-4); }
@@ -458,20 +467,17 @@
 .cqa-app .bar-name { overflow-wrap: anywhere; font-size: 14px; }
 .cqa-app .bar-val { font-size: 14px; min-width: 40px; text-align: right; }
 
-/* модальное окно (level 3, xl) */
 .cqa-app .cqa-dialog { border: 1px solid var(--cqa-border); border-radius: var(--cqa-r-xl); padding: var(--cqa-s-6); width: 560px; max-width: calc(100vw - 24px); max-height: 90vh; overflow: auto; background: var(--cqa-surface); color: var(--cqa-text); box-shadow: var(--cqa-shadow-3); }
 .cqa-app .cqa-dialog::backdrop { background: rgba(15, 26, 20, .5); }
 .cqa-app .cqa-dialog h3 { font-size: 22px; font-weight: 300; letter-spacing: -.22px; }
 .cqa-app .cqa-dialog[open] { animation: cqa-pop 200ms cubic-bezier(.2, .7, .3, 1); }
 @keyframes cqa-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
-/* уведомление */
 .cqa-app .toast { position: fixed; bottom: var(--cqa-s-5); right: var(--cqa-s-5); background: var(--cqa-text); color: var(--cqa-surface); padding: var(--cqa-s-3) var(--cqa-s-4); border-radius: var(--cqa-r-md); z-index: 40; max-width: min(440px, calc(100vw - 32px)); box-shadow: var(--cqa-shadow-3); display: none; font-weight: 500; font-variant-numeric: tabular-nums; }
 .cqa-app .toast.show { display: block; animation: cqa-pop 200ms cubic-bezier(.2, .7, .3, 1); }
 .cqa-app .toast.ok { box-shadow: inset 5px 0 0 var(--cqa-brand), var(--cqa-shadow-3); padding-left: 20px; }
 .cqa-app .toast.rd { background: var(--cqa-rd-bar); color: #FFFFFF; }
 
-/* ---------- адаптив: 1024 / 768 (сетки), 600 и 420 (узкие экраны) ---------- */
 @media (max-width: 1100px) {
   .cqa-app .hdr-inner { grid-template-columns: 1fr auto; grid-template-areas: "brand tools" "tabs tabs"; row-gap: var(--cqa-s-3); }
   .cqa-app .tabs { justify-self: start; }
@@ -509,7 +515,7 @@
   .cqa-app .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .cqa-app .hero-body { display: flex; flex-direction: column; align-items: center; }
   .cqa-app .stepper { flex-direction: column; }
-  .cqa-app .stepper .step, .cqa-app .stepper .decision { flex: none; } /* иначе flex-basis становится высотой в колонке */
+  .cqa-app .stepper .step, .cqa-app .stepper .decision { flex: none; }
   .cqa-app .step-arrow { justify-content: center; transform: rotate(90deg); }
   .cqa-app .bars li { grid-template-columns: minmax(80px, 110px) 1fr auto auto; }
   .cqa-app .bars li.wide { grid-template-columns: 1fr auto; }
@@ -530,7 +536,6 @@
   .cqa-app .conv:hover { transform: none; }
 }
 
-/* Dataset and evaluation controls follow the scoped Freedom theme. */
 .cqa-app .dataset-import { margin-bottom: 16px; }
 .cqa-app .dataset-import input { width: 160px; }
 .cqa-app .evaluation-cost { overflow-wrap: anywhere; grid-column: 1 / -1; }

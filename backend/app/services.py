@@ -20,7 +20,6 @@ class ApiError(Exception):
         self.message = message
 
 
-# ---------- id в API: строки (фронт сравнивает их с параметром из URL) ----------
 def ev_key(n: int) -> str:
     return f"ev-{n}"
 
@@ -38,7 +37,6 @@ def parse_key(s: str, prefix: str, what: str) -> int:
     return int(t)
 
 
-# ---------- сериализация ----------
 def answers_of(items: list[dict], final: bool) -> dict:
     return {i["criterion_id"]: (i.get("final_answer") if final and i.get("final_answer") is not None else i.get("answer")) for i in items}
 
@@ -107,7 +105,6 @@ def appeal_out(a: dict) -> dict:
     }
 
 
-# ---------- оценка ----------
 def run_evaluation(db: Database, settings: Settings, llm: LLMClient, conversation_id: str, checklist_id: str | None) -> dict:
     conv = db.get_conversation(conversation_id)
     if not conv:
@@ -135,7 +132,6 @@ def get_evaluation(db: Database, key: str) -> dict:
     return evaluation_out(ev)
 
 
-# ---------- апелляции ----------
 def create_appeal(db: Database, *, evaluation_item_id: str | None, conversation_id: str | None,
                   criterion_id: str | None, comment: str) -> dict:
     comment = (comment or "").strip()
@@ -207,7 +203,6 @@ def resolve_appeal(db: Database, key: str, new_answer, reason: str) -> dict:
         return appeal_out(db.get_appeal(aid, c))
 
 
-# ---------- импорт ----------
 def import_dataset(db: Database, settings: Settings, group_id: str) -> dict:
     group_id = group_id.strip()
     if not group_id:
