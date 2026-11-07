@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from . import services
+from . import compare, services
 from .dataset import read_dataset, save_dataset
 from .organizers import fetch_dataset
 from .config import Settings, load_settings
@@ -198,6 +198,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return db.create_checklist_version(name=body.name.strip(), description=body.description, criteria=criteria,
                                            family_id=body.family_id, based_on=body.based_on, activate=body.activate)
 
+    @api.get("/checklists/compare")
+    def compare_checklists(from_id: str = Query(alias="from", min_length=1), to_id: str = Query(alias="to", min_length=1)):
+        return compare.compare_checklists(db, from_id.strip(), to_id.strip())
+
     @api.post("/checklists/{checklist_id}/activate")
     def activate_checklist(checklist_id: str):
         cl = db.activate_checklist(checklist_id)
@@ -235,9 +239,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cl = db.get_checklist(body.checklist_id) if body.checklist_id else db.active_checklist()
         if not cl:
             raise ApiError(404, "Чек-лист не найден")
+        unknown = [i for i in ids if not db.get_conversation(i)]
         client = llm()  # ошибки конфигурации модели — сразу, до запуска фона
         job_id = jobs.start(ids, lambda cid: services.run_evaluation(db, settings, client, cid, cl["id"]), settings.eval_concurrency)
-        return {"job_id": job_id, "total": len(ids), "checklist_id": cl["id"]}
+        avg = db.average_evaluation_cost()
+        return {"job_id": job_id, "total": len(ids), "checklist_id": cl["id"], "checklist_version": cl["version"],
+                "unknown_conversations": unknown,
+                "estimated_cost_usd": round(avg * (len(ids) - len(unknown)), 6) if avg is not None else None}
+
+    @api.get("/evaluations/history")
+    def evaluation_history(group_id: str | None = None):
+        return compare.evaluation_history(db, group_id or None)
+
+    @api.get("/evaluations/cost")
+    def evaluation_cost():
+        return {"average_cost_usd": db.average_evaluation_cost()}
 
     @api.get("/evaluations/{evaluation_id}")
     def get_evaluation(evaluation_id: str):

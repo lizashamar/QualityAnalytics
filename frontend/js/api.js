@@ -14,6 +14,9 @@
 //   POST /appeals                           -> appeal (тело: {evaluation_item_id | conversation_id+criterion_id, comment})
 //   GET  /appeals                           -> appeal[]
 //   POST /appeals/{id}/resolve              -> appeal (тело: {new_answer, reason})
+//   GET  /checklists/compare?from=&to=      -> {from, to, diff, summary, rows} — сравнение двух версий
+//   GET  /evaluations/history?group_id=     -> [{conversation_id, checklist_id, checklist_version, total, final_total, …}]
+//   GET  /evaluations/cost                  -> {average_cost_usd}
 
 import { config } from './config.js';
 import { validAnswer, validateChecklist } from './scoring.js';
@@ -67,6 +70,9 @@ const remote = {
   createAppeal: (data) => http('POST', '/appeals', data).then(normAppeal),
   listAppeals: () => http('GET', '/appeals').then((list) => list.map(normAppeal)),
   resolveAppeal: (appealId, data) => http('POST', `/appeals/${enc(appealId)}/resolve`, data).then(normAppeal),
+  compareChecklists: (from, to) => http('GET', `/checklists/compare${qs({ from, to })}`),
+  listEvaluationHistory: () => http('GET', `/evaluations/history${qs({ group_id: activeGroup })}`),
+  getEvaluationCost: () => http('GET', '/evaluations/cost'),
 };
 
 // ---------- mock ----------
@@ -220,6 +226,39 @@ const mock = {
     ap.resolution = { new_answer, reason: String(reason).trim(), resolved_at: now() };
     save(db);
     return clone(ap);
+  },
+  async compareChecklists(from, to) {
+    const db = await load(); await wait(150);
+    const a = db.checklists.find((x) => x.id === from) || fail(`Чек-лист «${from}» не найден`);
+    const b = db.checklists.find((x) => x.id === to) || fail(`Чек-лист «${to}» не найден`);
+    if (a.id === b.id) fail('Выберите две разные версии чек-листа');
+    const { diffCriteria, compareEvaluations } = await import('./compare.js');
+    const map = (cl) => Object.fromEntries(db.conversations
+      .map((c) => latestFor(db, c.conversation_id, cl.id)).filter(Boolean)
+      .map((ev) => [ev.conversation_id, { ev, criteria: cl.criteria }]));
+    const brief = (cl) => ({ id: cl.id, name: cl.name, version: cl.version, family_id: cl.family_id, created_at: cl.created_at, criteria: cl.criteria.length });
+    return clone({ from: brief(a), to: brief(b), diff: diffCriteria(a.criteria, b.criteria), ...compareEvaluations(map(a), map(b)) });
+  },
+  async listEvaluationHistory() {
+    const db = await load(); await wait(60);
+    const { calculate } = await import('./scoring.js');
+    const out = [];
+    for (const c of db.conversations) {
+      const latest = latestFor(db, c.conversation_id);
+      for (const cl of [...db.checklists].sort((x, y) => x.version - y.version)) {
+        const ev = latestFor(db, c.conversation_id, cl.id);
+        if (!ev) continue;
+        const r = calculate(cl.criteria, Object.fromEntries(ev.items.map((i) => [i.criterion_id, i.answer])));
+        out.push({ conversation_id: c.conversation_id, evaluation_id: ev.id, checklist_id: cl.id, checklist_version: cl.version,
+          total: r.total, final_total: null, gross_flag: r.gross_flag, created_at: ev.created_at, archived: !latest || latest.id !== ev.id });
+      }
+    }
+    return out;
+  },
+  async getEvaluationCost() {
+    const db = await load();
+    const costs = db.evaluations.map((e) => e.usage?.cost_usd).filter((x) => typeof x === 'number');
+    return { average_cost_usd: costs.length ? costs.reduce((s, x) => s + x, 0) / costs.length : null };
   },
   async resetMock() {
     memory = null;

@@ -261,6 +261,31 @@ class Database:
         with self.conn() as c:
             return [self._evaluation(r) for r in c.execute(q + " WHERE e.archived = 0 ORDER BY e.id", args)]
 
+    def latest_evaluations_by_checklist(self, checklist_id: str) -> dict[str, dict]:
+        """conversation_id -> последняя оценка по этой версии чек-листа (включая архивные)."""
+        q = ("SELECT e.* FROM evaluations e JOIN (SELECT conversation_id, MAX(id) AS mid FROM evaluations"
+             " WHERE checklist_id = ? GROUP BY conversation_id) m ON e.id = m.mid")
+        with self.conn() as c:
+            return {r["conversation_id"]: self._evaluation(r) for r in c.execute(q, (checklist_id,))}
+
+    def latest_evaluations_per_version(self, group_id: str | None = None) -> list[dict]:
+        """По каждому диалогу — последняя оценка по каждой версии чек-листа, в порядке версий."""
+        q = ("SELECT e.* FROM evaluations e JOIN (SELECT conversation_id, checklist_id, MAX(id) AS mid FROM evaluations"
+             " GROUP BY conversation_id, checklist_id) m ON e.id = m.mid")
+        args: tuple = ()
+        if group_id:
+            q += " JOIN conversations c ON c.conversation_id = e.conversation_id AND c.dataset_group = ?"
+            args = (group_id,)
+        with self.conn() as c:
+            return [self._evaluation(r) for r in c.execute(q + " ORDER BY e.conversation_id, e.checklist_version, e.id", args)]
+
+    def average_evaluation_cost(self) -> float | None:
+        """Средняя стоимость одной оценки по сохранённым usage.cost_usd (None — цены не заданы)."""
+        with self.conn() as c:
+            r = c.execute("SELECT AVG(json_extract(usage_json, '$.cost_usd')) FROM evaluations"
+                          " WHERE json_extract(usage_json, '$.cost_usd') IS NOT NULL").fetchone()
+            return round(r[0], 6) if r and r[0] is not None else None
+
     def update_evaluation_items(self, c: sqlite3.Connection, eid: int, items: list[dict]) -> None:
         c.execute("UPDATE evaluations SET items_json = ? WHERE id = ?", (dumps(items), eid))
 

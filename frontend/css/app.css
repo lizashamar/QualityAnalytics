@@ -548,3 +548,78 @@
   .cqa-app .dataset-import input { width: 100%; }
   .cqa-app .ed-item > div:first-child { min-width: 0; }
 }
+
+/* ---------- сравнение версий чек-листа ---------- */
+.cqa-app .ver-trail { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12.5px; color: var(--cqa-text-2); font-variant-numeric: tabular-nums; margin-top: var(--cqa-s-2); }
+.cqa-app .ver-trail .ic { width: 12px; height: 12px; color: var(--cqa-muted); }
+.cqa-app .ver-delta { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; margin-left: 2px; }
+.cqa-app .ver-trail.d-ok .ver-delta, .cqa-app .delta-b.d-ok { color: var(--cqa-ok-fg); }
+.cqa-app .ver-trail.d-rd .ver-delta, .cqa-app .delta-b.d-rd { color: var(--cqa-rd-fg); }
+.cqa-app .ver-trail.d-ne .ver-delta, .cqa-app .delta-b.d-ne { color: var(--cqa-muted); }
+.cqa-app .ver-trail.d-ok .ver-delta .ic, .cqa-app .ver-trail.d-rd .ver-delta .ic { color: currentColor; }
+.cqa-app .delta-b { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 2px 8px; border-radius: var(--cqa-r-pill); }
+.cqa-app .delta-b.d-ok { background: var(--cqa-ok-bg); }
+.cqa-app .delta-b.d-rd { background: var(--cqa-rd-bg); }
+.cqa-app .delta-b.d-ne { background: var(--cqa-ne-bg); }
+.cqa-app .delta-b .ic { width: 13px; height: 13px; }
+.cqa-app .cmp-pick { gap: var(--cqa-s-2); }
+.cqa-app .cmp-pick select { width: auto; max-width: 260px; }
+.cqa-app .cmp-pick label.inline { margin: 0; }
+.cqa-app .cmp-kpis .big { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.cqa-app .cmp-kpis .big .ic { width: 18px; height: 18px; color: var(--cqa-muted); }
+.cqa-app .cmp-kpis .hint .ic { width: 12px; height: 12px; vertical-align: -2px; }
+.cqa-app .diff-list { list-style: none; margin: 0; padding: 0; }
+.cqa-app .diff-item { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--cqa-s-3); align-items: start; padding: var(--cqa-s-3) 0; border-bottom: 1px solid var(--cqa-border); }
+.cqa-app .diff-item:last-child { border-bottom: 0; }
+.cqa-app .diff-kind { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.cqa-app .diff-item.add .diff-kind { color: var(--cqa-ok-fg); }
+.cqa-app .diff-item.del .diff-kind { color: var(--cqa-rd-fg); }
+.cqa-app .diff-item.mod .diff-kind { color: var(--cqa-ac-fg); }
+.cqa-app .diff-title { font-weight: 500; overflow-wrap: anywhere; }
+.cqa-app .diff-meta { font-size: 13px; color: var(--cqa-text-2); }
+.cqa-app .diff-changes { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.cqa-app .diff-changes > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: var(--cqa-s-2); }
+.cqa-app .diff-changes dt { color: var(--cqa-muted); }
+.cqa-app .diff-changes dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.cqa-app .diff-changes s { color: var(--cqa-muted); }
+.cqa-app .diff-changes .ic, .cqa-app .cmp-crit .ic { width: 12px; height: 12px; vertical-align: -2px; color: var(--cqa-muted); }
+.cqa-app .cmp-table .num { font-variant-numeric: tabular-nums; font-weight: 500; }
+.cqa-app .cmp-table .num.t-ok, .cqa-app .cmp-table .num.t-wn, .cqa-app .cmp-table .num.t-rd { color: var(--cqa-text); }
+.cqa-app .cmp-table .final { font-weight: 400; }
+.cqa-app .cmp-row.d-ok td:first-child { box-shadow: inset 3px 0 0 var(--cqa-ok-bar); }
+.cqa-app .cmp-row.d-rd td:first-child { box-shadow: inset 3px 0 0 var(--cqa-rd-bar); }
+.cqa-app .cmp-toggle { width: 28px; min-width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: var(--cqa-border); color: var(--cqa-text-2); }
+.cqa-app .cmp-toggle .ic { width: 14px; height: 14px; }
+.cqa-app .cmp-detail td { background: var(--cqa-surface-2); }
+.cqa-app .cmp-crit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 150px; gap: var(--cqa-s-3); padding: 6px 0; border-bottom: 1px solid var(--cqa-border); font-size: 13.5px; }
+.cqa-app .cmp-crit:last-of-type { border-bottom: 0; }
+.cqa-app .cmp-crit s { color: var(--cqa-muted); }
+.cqa-app .cmp-crit .num { text-align: right; font-variant-numeric: tabular-nums; }
+.cqa-app .eyebrow-sm { margin: var(--cqa-s-2) 0 2px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: var(--cqa-muted); }
+.cqa-app .mono-id { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cqa-app .reeval { margin-bottom: var(--cqa-s-5); align-items: flex-start; }
+.cqa-app .reeval h3 { margin: 0 0 var(--cqa-s-2); color: inherit; }
+.cqa-app .reeval fieldset { border: 0; padding: 0; margin: var(--cqa-s-2) 0; }
+.cqa-app .reeval label.opt { background: var(--cqa-surface); color: var(--cqa-text); }
+.cqa-app .reeval label.opt .hint { margin-left: auto; }
+.cqa-app .reeval .num { width: 80px; min-height: 32px; padding: 4px 8px; }
+.cqa-app .reeval .hint { color: var(--cqa-text-2); }
+.cqa-app .reeval progress { width: 100%; accent-color: var(--cqa-brand-strong); }
+@media (max-width: 767px) {
+  .cqa-app .diff-item { grid-template-columns: 1fr; gap: 4px; }
+  .cqa-app .diff-changes > div { grid-template-columns: 1fr; gap: 0; }
+  .cqa-app .cmp-crit { grid-template-columns: 1fr; gap: 2px; }
+  .cqa-app .cmp-crit .num { text-align: left; }
+  .cqa-app .cmp-pick select { flex: 1 1 140px; max-width: none; }
+}
+.cqa-app .card-head .row { gap: var(--cqa-s-3); }
+.cqa-app .card-head label.check { margin: 0; }
+.cqa-app .card-head label.inline { margin: 0; }
+.cqa-app .card-head select, .cqa-app #cmp-sort { width: auto; } /* перебивает label + select { width: 100% } */
+@media (max-width: 767px) {
+  .cqa-app .cmp-table th:nth-child(6), .cqa-app .cmp-table th:nth-child(7),
+  .cqa-app .cmp-row td:nth-child(6), .cqa-app .cmp-row td:nth-child(7) { display: none; }
+  .cqa-app .cmp-table td, .cqa-app .cmp-table th { padding: 8px 6px; }
+  .cqa-app .cmp-table .th-sort { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+  .cqa-app .cmp-table .final { display: block; }
+}

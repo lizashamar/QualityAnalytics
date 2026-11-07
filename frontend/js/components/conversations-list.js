@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { loadAll, toast, evaluateMany } from '../actions.js';
 import {
   LANG, CHANNEL, STATUS, latestEvaluation, finalResult, conversationStatus, checklistById, fmtScore, activeChecklist, checklistLabel,
+  versionTrail, trailView,
 } from '../results.js';
 import { scoreRing, emptyState } from './ui.js';
 
@@ -60,6 +61,7 @@ function cardView(s, r, selected, busy) {
         ${flag ? html`<span class="b rd">${icon('flag')}<span>Грубое нарушение</span></span>` : ''}
         ${cl ? html`<span class="hint">v${cl.version} · ${c.transcript.length} реплик</span>` : html`<span class="hint">${c.transcript.length} реплик</span>`}
       </div>
+      ${trailView(versionTrail(s, c.conversation_id))}
     </div>
     <div class="conv-score">
       ${r.R ? html`${scoreRing(r.R.final.total, { key: r.ev.id, size: 'sm', label: `Итог ${c.conversation_id}` })}
