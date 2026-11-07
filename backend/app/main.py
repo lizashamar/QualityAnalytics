@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from typing import Literal, Union
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -17,6 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import services
+from .dataset import read_dataset, save_dataset
+from .organizers import fetch_dataset
 from .config import Settings, load_settings
 from .db import Database
 from .jobs import JobManager
@@ -132,6 +134,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return UTF8JSONResponse({"detail": "Некорректный запрос — " + "; ".join(parts)}, status_code=400)
 
     api = APIRouter(prefix="/api")
+
+    @api.get("/fetch-dataset")
+    def fetch_saved_dataset(group_id: str = Query(default="DEV", min_length=1, max_length=128)):
+        group_id = group_id.strip()
+        if not group_id:
+            raise ApiError(400, "group_id не может быть пустым")
+        data = fetch_dataset(settings.organizer_api_url, group_id)
+        save_dataset(settings.dataset_file, data)
+        return data
+
+    @api.get("/dialogues")
+    def saved_dialogues():
+        return read_dataset(settings.dataset_file)["records"]
 
     # --- диалоги ---
     @api.get("/conversations")

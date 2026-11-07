@@ -167,3 +167,40 @@ cd ..\frontend; node test/scoring.test.js
 
 `.env`, `*.db` и `docs/dev.json` в `.gitignore`. В логах нет ключей, транскриптов и `audio_url`,
 только id диалогов, токены, время и стоимость. Авторизации нет (прототип).
+
+## Checkpoint 1: ingestion proxy and local snapshot
+
+Configure `ORGANIZER_API_URL` in `backend/.env` with the organizer's GET endpoint.
+The URL can include `{group_id}`; otherwise the backend adds/replaces the query parameter.
+No organizer endpoint is bundled with this repository.
+
+```sh
+# From the repository root (macOS/Linux):
+python3 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+# Set ORGANIZER_API_URL, then:
+.venv/bin/python -m uvicorn app.main:app --app-dir backend --port 8000
+curl 'http://localhost:8000/api/fetch-dataset'
+curl 'http://localhost:8000/api/dialogues'
+```
+
+- `GET /api/fetch-dataset?group_id=DEV` calls the organizer server-side and atomically
+  saves `{group_id, total_records, records, skipped}` to `backend/dataset.json`.
+  `DEV` is the default; use another group for the control batch. The response is the saved object.
+- `GET /api/dialogues` returns the saved `records` array without contacting the organizer,
+  including after a server restart. A missing snapshot returns 404.
+- `DATASET_PATH` overrides the snapshot location (relative paths resolve under `backend/`).
+- Invalid individual records are omitted and counted in `skipped`, matching the existing importer.
+  Malformed envelopes, upstream HTTP errors and timeouts return 502 and preserve the last snapshot.
+- The frontend is served at the same origin, so requests to `/api/dialogues` need no browser CORS workaround.
+  The existing `/api/datasets/import` continues to import into SQLite for the current UI;
+  the snapshot endpoint is independent of that workflow.
+- DEV is expected to contain 65 dialogues; inspect `total_records`, `records.length`, and `skipped`
+  to verify the live batch. Other group sizes are accepted.
+
+Tests: `.venv/bin/python -m pytest backend/tests -q`.
+Live organizer verification requires a configured URL; automated tests use a 65-dialogue fixture.
+
+Checkpoint progress: Checkpoint 1 implemented with automated ingestion tests; live DEV verification
+pending organizer URL. Checkpoints 2–6 have not been audited against the new specification.

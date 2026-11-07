@@ -45,8 +45,14 @@ class Settings:
     price_out_per_mtok: float | None = None
     organizer_api_url: str = ""
     eval_concurrency: int = 4
+    dataset_path: str = "dataset.json"
     db_path: str = "cqa.db"
     frontend_dir: str = str(FRONTEND_DIR)
+
+    @property
+    def dataset_file(self) -> Path:
+        p = Path(self.dataset_path)
+        return p if p.is_absolute() else BACKEND_DIR / p
 
     @property
     def db_file(self) -> Path:
@@ -75,5 +81,6 @@ def load_settings() -> Settings:
         price_out_per_mtok=_float(env.get("PRICE_OUT_PER_MTOK")),
         organizer_api_url=(env.get("ORGANIZER_API_URL") or "").strip(),
         eval_concurrency=max(1, int(env.get("EVAL_CONCURRENCY") or 4)),
+        dataset_path=(env.get("DATASET_PATH") or "dataset.json").strip(),
         db_path=(env.get("DB_PATH") or "cqa.db").strip(),
     )

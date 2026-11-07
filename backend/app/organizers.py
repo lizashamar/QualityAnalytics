@@ -6,7 +6,7 @@ group_id подставляется в {group_id}, если он есть в URL
 from __future__ import annotations
 
 import logging
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
 
 import httpx
 
@@ -19,7 +19,7 @@ class OrganizerError(Exception):
 
 def build_url(template: str, group_id: str) -> str:
     if "{group_id}" in template:
-        return template.replace("{group_id}", group_id)
+        return template.replace("{group_id}", quote(group_id, safe=""))
     parts = urlsplit(template)
     q = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "group_id"] + [("group_id", group_id)]
     return urlunsplit(parts._replace(query=urlencode(q)))
@@ -62,7 +62,11 @@ def parse_response(body, group_id: str) -> dict:
         msg = (body.get("error") if isinstance(body, dict) else "") or "isSuccess=false"
         raise OrganizerError(f"API организаторов сообщило об ошибке: {msg}")
     data = body.get("data") or {}
-    raw = data.get("records") or []
+    if not isinstance(data, dict):
+        raise OrganizerError("API организаторов: data должно быть объектом")
+    raw = data.get("records")
+    if not isinstance(raw, list):
+        raise OrganizerError("API организаторов: records должно быть массивом")
     records = [r for r in raw if _valid_record(r)]
     log.info("organizers group=%s records=%d skipped=%d", group_id, len(records), len(raw) - len(records))
     return {

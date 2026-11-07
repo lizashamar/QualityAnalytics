@@ -12,3 +12,6 @@ docs/dev.json
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Local organizer dataset (may contain personal data and signed audio URLs)
+backend/dataset.json
