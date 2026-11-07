@@ -78,7 +78,7 @@ export function editorView(s) {
             <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="-1" aria-label="Переместить «${c.title}» выше" title="Выше" ${attr('disabled', i === 0)}>${icon('up')}</button>
             <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="1" aria-label="Переместить «${c.title}» ниже" title="Ниже" ${attr('disabled', i === d.criteria.length - 1)}>${icon('down')}</button>
             <button type="button" class="btn-sm" data-action="cr-edit" data-i="${i}">${icon('edit')}Изменить</button>
-            <button type="button" class="btn-sm d" data-action="cr-delete" data-i="${i}" aria-label="Удалить критерий «${c.title}»">${icon('trash')}Удалить</button>
+            <button type="button" class="btn-sm d" data-action="cr-delete" data-i="${i}" aria-label="Удалить критерий «${c.title}»" title="Удалить">${icon('trash')}<span class="btn-label">Удалить</span></button>
           </div></li>`;
       })}
       </ol>

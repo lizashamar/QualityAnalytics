@@ -125,7 +125,7 @@ export function scorePanelView(s, conv, ev) {
   if (orphan.length) groups.push({ section: 'Без критерия в чек-листе', items: orphan.map((i) => [i, null]) });
 
   const step = (label, value, flag, extra = '') => html`<li class="step t-${scoreTone(value)}">
-    <span class="step-lbl">${label}</span><b class="big">${fmtScore(value)}</b>${flag ? html`<span class="b rd">${icon('alert')}<span>грубое нарушение</span></span>` : ''}${extra}</li>`;
+    <span class="step-lbl">${label}</span><b class="big">${fmtScore(value)}</b>${flag ? html`<span class="b rd" title="Грубое нарушение">${icon('alert')}<span><span class="sr">грубое </span>нарушение</span></span>` : ''}${extra}</li>`;
 
   return html`
     ${R.final.gross_flag ? grossBanner(R, ev) : ''}

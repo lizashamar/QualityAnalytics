@@ -105,16 +105,15 @@ const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
 function navView(s) {
   const cur = NAV_OF[s.route.name] || s.route.name;
   const pending = s.appeals.filter((a) => a.status === 'pending').length;
-  return html`
-    <div class="hdr-top">
-      <div class="brand"><b>CQA · Анализ качества диалогов</b><span>Freedom Broker × NU Data Challenge</span></div>
-      <div class="hdr-tools">
-        <span class="b ${config.USE_MOCK ? 'wn' : 'ok'} mode" title="${config.USE_MOCK ? 'Данные симулируются в браузере' : config.API_BASE}">${icon(config.USE_MOCK ? 'info' : 'check')}<span>${config.USE_MOCK ? 'Демо-режим (mock)' : 'API подключён'}</span></span>
-        <button type="button" class="icon-btn theme" data-action="theme" aria-label="${THEME_LABEL[s.theme]}. Переключить тему" title="${THEME_LABEL[s.theme]}">${icon(THEME_ICON[s.theme])}</button>
-      </div>
-    </div>
+  return html`<div class="hdr-inner">
+    <div class="brand"><b>CQA · Анализ качества диалогов</b><span>Freedom Broker × NU Data Challenge</span></div>
     <nav class="tabs" aria-label="Разделы"><ul>${NAV.map(([k, href, label, ic]) => html`<li><a href="${href}" ${k === cur ? html`aria-current="page" class="on"` : ''}>
-      ${icon(ic)}<span>${label}</span>${k === 'appeals' && pending ? html`<span class="count" aria-label="${pending} на рассмотрении">${pending}</span>` : ''}</a></li>`)}</ul></nav>`;
+      ${icon(ic)}<span>${label}</span>${k === 'appeals' && pending ? html`<span class="count" aria-label="${pending} на рассмотрении">${pending}</span>` : ''}</a></li>`)}</ul></nav>
+    <div class="hdr-tools">
+      <span class="b ${config.USE_MOCK ? 'wn' : 'ok'} mode" title="${config.USE_MOCK ? 'Данные симулируются в браузере' : config.API_BASE}">${icon(config.USE_MOCK ? 'info' : 'check')}<span>${config.USE_MOCK ? 'Демо-режим (mock)' : 'API подключён'}</span></span>
+      <button type="button" class="icon-btn theme" data-action="theme" aria-label="${THEME_LABEL[s.theme]}. Переключить тему" title="${THEME_LABEL[s.theme]}">${icon(THEME_ICON[s.theme])}</button>
+    </div>
+  </div>`;
 }
 
 function loadingView() {
