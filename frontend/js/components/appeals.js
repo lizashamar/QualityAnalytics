@@ -11,8 +11,8 @@ import {
 import { transcriptView } from './transcript.js';
 import { createAppeal, resolveAppeal, toast, fail } from '../actions.js';
 
-const STATUS = { pending: 'На рассмотрении', resolved: 'Рассмотрена' };
-const tone = (st) => (st === 'pending' ? 'wn' : 'ok');
+const STATUS = { pending: 'На рассмотрении', resolved: 'Рассмотрена', outdated: 'Устарела' };
+const tone = (st) => (st === 'pending' ? 'wn' : st === 'outdated' ? 'ne' : 'ok');
 
 // ---------- очередь ----------
 export function listView(s) {
@@ -111,7 +111,9 @@ export function reviewView(s) {
           <p id="rv-err" class="err" role="alert">${r.error || ''}</p>
           ${preview ? html`<p class="preview" aria-live="polite">Итог после решения: <b>${fmtScore(R.final.total)}</b> → <b>${fmtScore(preview.total)}</b>${preview.gross_flag ? ' · грубое нарушение' : ''}</p>` : ''}
           <div class="row end"><a class="btn" href="#/appeals">Отмена</a><button type="submit" class="p">Подтвердить решение</button></div>
-        </form>` : html`<section class="card"><h3>Решение проверяющего</h3>
+        </form>` : !ap.resolution ? html`<section class="card"><h3>Апелляция устарела</h3>
+          <p class="mu">Диалог был переоценён, исходная оценка больше не действует. Если спор остался, оспорьте новую оценку в карточке диалога.</p></section>`
+        : html`<section class="card"><h3>Решение проверяющего</h3>
           <ol class="layers">
             <li><span class="lbl">Исходная оценка</span>${answerBadge(c, ap.original_answer)}</li>
             <li><span class="lbl">Решение проверяющего</span>${answerBadge(c, ap.resolution.new_answer)} <span class="reason">«${ap.resolution.reason}»</span> <span class="mu small">${fmtDate(ap.resolution.resolved_at)}</span></li>

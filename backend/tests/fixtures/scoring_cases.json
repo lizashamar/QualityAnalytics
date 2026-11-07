@@ -1,0 +1,68 @@
+{
+  "_comment": "Общие кейсы расчёта для backend/tests (pytest) и frontend/test (node). Критерии — seed-чек-лист, если не задано иное.",
+  "calculate": [
+    {
+      "name": "c1 yes, c2 na, c3 na, c4=15, c5 yes, c6=7, c7 yes, c8 no -> 85.38 (W=65)",
+      "answers": {"c1": "yes", "c2": "na", "c3": "na", "c4": 15, "c5": "yes", "c6": 7, "c7": "yes", "c8": "no"},
+      "expect": {"total": 85.38, "gross_flag": false, "applicable_weight": 65}
+    },
+    {
+      "name": "все максимальные ответы -> 100",
+      "answers": {"c1": "yes", "c2": "yes", "c3": "yes", "c4": 20, "c5": "yes", "c6": 10, "c7": "yes", "c8": "no"},
+      "expect": {"total": 100, "gross_flag": false, "applicable_weight": 100}
+    },
+    {
+      "name": "все минимальные, c8 yes -> 0 и gross_flag",
+      "answers": {"c1": "no", "c2": "no", "c3": "no", "c4": 0, "c5": "no", "c6": 0, "c7": "no", "c8": "yes"},
+      "expect": {"total": 0, "gross_flag": true, "applicable_weight": 100}
+    },
+    {
+      "name": "флаг не обнуляет итог",
+      "answers": {"c1": "yes", "c2": "yes", "c3": "yes", "c4": 20, "c5": "yes", "c6": 10, "c7": "yes", "c8": "yes"},
+      "expect": {"total": 100, "gross_flag": true, "applicable_weight": 100}
+    },
+    {
+      "name": "c4=20, c6=7, остальное максимум -> 95.5",
+      "answers": {"c1": "yes", "c2": "yes", "c3": "yes", "c4": 20, "c5": "yes", "c6": 7, "c7": "yes", "c8": "no"},
+      "expect": {"total": 95.5, "gross_flag": false, "applicable_weight": 100}
+    },
+    {
+      "name": "только критерии с N/A, все na -> null",
+      "only": ["c2", "c3", "c4", "c7"],
+      "answers": {"c2": "na", "c3": "na", "c4": "na", "c7": "na"},
+      "expect": {"total": null, "gross_flag": false, "applicable_weight": 0}
+    },
+    {
+      "name": "все применимые na, остался только флаг -> null",
+      "only": ["c2", "c3", "c4", "c7", "c8"],
+      "answers": {"c2": "na", "c3": "na", "c4": "na", "c7": "na", "c8": "yes"},
+      "expect": {"total": null, "gross_flag": true, "applicable_weight": 0}
+    },
+    {
+      "name": "отсутствующий ответ c3 даёт 0, не исключает -> 80",
+      "answers": {"c1": "yes", "c2": "yes", "c4": 20, "c5": "yes", "c6": 10, "c7": "yes", "c8": "no"},
+      "expect": {"total": 80, "gross_flag": false, "applicable_weight": 100}
+    },
+    {
+      "name": "N/A у c2,c3,c4,c7 и шкала c6=4 -> 77.5 (W=40)",
+      "answers": {"c1": "yes", "c2": "na", "c3": "na", "c4": "na", "c5": "yes", "c6": 4, "c7": "na", "c8": "no"},
+      "expect": {"total": 77.5, "gross_flag": false, "applicable_weight": 40}
+    },
+    {
+      "name": "округление: 35.5/65 -> 54.62",
+      "answers": {"c1": "no", "c2": "na", "c3": "na", "c4": 10, "c5": "yes", "c6": 7, "c7": "no", "c8": "no"},
+      "expect": {"total": 54.62, "gross_flag": false, "applicable_weight": 65}
+    }
+  ],
+  "valid_answer": [
+    {"criterion_id": "c4", "answer": 12, "valid": false},
+    {"criterion_id": "c4", "answer": 15, "valid": true},
+    {"criterion_id": "c4", "answer": "yes", "valid": false},
+    {"criterion_id": "c1", "answer": "na", "valid": false},
+    {"criterion_id": "c2", "answer": "na", "valid": true},
+    {"criterion_id": "c1", "answer": 15, "valid": false},
+    {"criterion_id": "c8", "answer": "yes", "valid": true},
+    {"criterion_id": "c6", "answer": 7, "valid": true},
+    {"criterion_id": "c6", "answer": "7", "valid": false}
+  ]
+}

@@ -9,7 +9,8 @@ import { store } from '../store.js';
 export function parseTs(ts) {
   if (typeof ts !== 'string') return null;
   if (/^\d{1,2}(:\d{1,2}){1,2}$/.test(ts.trim())) return ts.trim().split(':').map(Number).reduce((a, n) => a * 60 + n, 0);
-  const t = Date.parse(ts);
+  // У звонков бывает 7 знаков долей секунды — оставляем 3 для надёжного разбора (сама метка не меняется).
+  const t = Date.parse(ts.replace(/(\.\d{3})\d+/, '$1'));
   return Number.isNaN(t) ? null : t / 1000;
 }
 

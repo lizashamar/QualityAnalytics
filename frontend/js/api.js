@@ -43,6 +43,9 @@ async function http(method, path, body) {
   return res.status === 204 ? null : res.json();
 }
 
+// Бэкенд хранит статус апелляции как open|resolved|outdated; интерфейс называет открытую «pending».
+const normAppeal = (a) => (a && a.status === 'open' ? { ...a, status: 'pending' } : a);
+
 const remote = {
   getConversations: () => http('GET', `/conversations${qs({ group_id: config.GROUP_ID })}`),
   getConversation: (id) => http('GET', `/conversations/${enc(id)}`),
@@ -54,9 +57,9 @@ const remote = {
     ? http('GET', `/evaluations/${enc(query)}`)
     : http('GET', `/evaluations/latest${qs(query)}`)),
   listEvaluations: () => http('GET', `/evaluations${qs({ group_id: config.GROUP_ID, latest: 1 })}`),
-  createAppeal: (data) => http('POST', '/appeals', data),
-  listAppeals: () => http('GET', '/appeals'),
-  resolveAppeal: (appealId, data) => http('POST', `/appeals/${enc(appealId)}/resolve`, data),
+  createAppeal: (data) => http('POST', '/appeals', data).then(normAppeal),
+  listAppeals: () => http('GET', '/appeals').then((list) => list.map(normAppeal)),
+  resolveAppeal: (appealId, data) => http('POST', `/appeals/${enc(appealId)}/resolve`, data).then(normAppeal),
 };
 
 // ---------- mock ----------

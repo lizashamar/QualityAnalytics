@@ -92,6 +92,7 @@ export async function saveChecklist(draft, activate) {
     name: draft.name,
     description: draft.description,
     criteria: draft.criteria,
+    activate: !!activate,
   });
   if (activate) await api.activateChecklist(saved.id);
   await refreshChecklists();

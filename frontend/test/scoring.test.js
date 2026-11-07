@@ -1,5 +1,6 @@
 // Запуск: node test/scoring.test.js  (из папки frontend/, без зависимостей)
 import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
 import { calculate, validAnswer, allowedAnswers, validateChecklist } from '../js/scoring.js';
 import { SEED_CRITERIA as C } from '../js/checklist.seed.js';
 
@@ -86,5 +87,23 @@ test('allowedAnswers', () => {
   assert.deepEqual(allowedAnswers(by('c4')), [20, 15, 10, 5, 0, 'na']);
   assert.deepEqual(allowedAnswers(by('c1')), ['yes', 'no']);
 });
+
+// Общие кейсы с бэкендом (backend/tests/fixtures/scoring_cases.json) — паритет JS и Python.
+const fixtures = new URL('../../backend/tests/fixtures/scoring_cases.json', import.meta.url);
+if (existsSync(fixtures)) {
+  const F = JSON.parse(readFileSync(fixtures, 'utf8'));
+  for (const k of F.calculate) {
+    test(`fixture: ${k.name}`, () => {
+      const crit = k.only ? C.filter((c) => k.only.includes(c.id)) : C;
+      const r = calculate(crit, k.answers);
+      assert.equal(r.total, k.expect.total);
+      assert.equal(r.gross_flag, k.expect.gross_flag);
+      assert.equal(r.applicable_weight, k.expect.applicable_weight);
+    });
+  }
+  for (const k of F.valid_answer) {
+    test(`fixture: validAnswer ${k.criterion_id}=${JSON.stringify(k.answer)}`, () => assert.equal(validAnswer(by(k.criterion_id), k.answer), k.valid));
+  }
+}
 
 console.log(`\n${passed} passed`);

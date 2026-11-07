@@ -1,0 +1,14 @@
+# секреты и локальные данные
+.env
+backend/.env
+*.db
+*.db-wal
+*.db-shm
+# реальный датасет: audio_url содержат подписанные ключи (sig)
+docs/dev.json
+
+# окружение
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
