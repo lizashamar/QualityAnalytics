@@ -13,6 +13,8 @@ handlers.change['select-visible']({checked:false});
 assert.deepEqual(store.get().selectedConversations,['b']);
 assert.ok(String(view(store.get())).includes('Оценить выбранные (1)'));
 assert.ok(String(view(store.get())).includes('Оценить все (3)'));
+assert.ok(String(view(store.get())).includes('class="conv-list"'));
+assert.ok(String(view(store.get())).includes('class="conv-select"'));
 let started=[];
 let progress=[];
 const unsubscribe = store.subscribe(s=>{if(s.applying) progress.push(s.applying.done);});

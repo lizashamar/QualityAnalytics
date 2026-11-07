@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>CQA · Оценка качества диалогов</title>
+  <title>CQA · Анализ качества диалогов</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="css/app.css">
+  <!-- Только для отдельной страницы: стили компонента сами по себе ограничены корнем .cqa-app. -->
+  <style>html, body { margin: 0; }</style>
   <!--
     Настройка (необязательно), до подключения app.js:
     <script>window.CQA_CONFIG = { API_BASE: 'https://host/api', GROUP_ID: 'group-1', USE_MOCK: false };</script>
@@ -13,11 +15,13 @@
   -->
 </head>
 <body>
-  <button type="button" class="skip" data-action="skip">Перейти к содержимому</button>
-  <nav id="nav" aria-label="Разделы"></nav>
-  <main id="main" tabindex="-1"></main>
-  <dialog id="modal" aria-modal="true"></dialog>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div class="cqa-app" id="app">
+    <button type="button" class="skip" data-action="skip">Перейти к содержимому</button>
+    <header class="cqa-header" id="nav"></header>
+    <main class="cqa-main" id="main" tabindex="-1"></main>
+    <dialog id="modal" class="cqa-dialog" aria-modal="true"></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </div>
   <!-- Необязательно: при отдаче с бэкенда (uvicorn) этот файл задаёт API_BASE = <origin>/api.
        При статическом сервере его нет (404) — фронтенд остаётся в mock-режиме. -->
   <script src="config.local.js"></script>

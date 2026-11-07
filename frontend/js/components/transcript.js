@@ -2,6 +2,7 @@
 // Реплики адресуются индексом в массиве transcript (id="r-<индекс>"), людям показываем индекс+1.
 
 import { html } from '../html.js';
+import { icon } from '../icons.js';
 import { ROLE, replicaNo } from '../results.js';
 import { store } from '../store.js';
 
@@ -43,24 +44,29 @@ export function transcriptView(conv, { from = 0, to = Infinity, highlight = { in
     const r = t[i];
     const role = ROLE[r.speaker] ? r.speaker : 'system';
     const hl = highlight.indices.includes(i);
+    const rng = inRange(i);
     const canSeek = hasAudio && offs[i] !== null && (role === 'client' || role === 'operator');
-    list.push(html`<li class="msg ${role}${hl ? ' hl' : ''}${inRange(i) ? ' rng' : ''}" id="r-${i}" tabindex="-1"
-        aria-label="Реплика ${replicaNo(i)}, ${ROLE[role] || r.speaker}${hl ? ', подсвечена как доказательство' : ''}">
-      <div class="meta"><span class="no">#${replicaNo(i)}</span><span class="role">${ROLE[role] || r.speaker}</span><time>${r.timestamp}</time>
-        ${canSeek ? html`<button type="button" class="link" data-action="seek" data-index="${i}" aria-label="Перемотать запись к реплике ${replicaNo(i)} (${fmtOffset(offs[i])})">▶ к записи · ${fmtOffset(offs[i])}</button>` : ''}
-        ${hl ? html`<span class="tag">доказательство</span>` : ''}
+    list.push(html`<li class="msg ${role}${hl ? ' hl' : ''}${rng ? ' rng' : ''}" id="r-${i}" tabindex="-1"
+        aria-label="Реплика ${replicaNo(i)}, ${ROLE[role] || r.speaker}${hl ? ', доказательство' : ''}${rng ? ', проверенный участок' : ''}">
+      <div class="bubble">
+        <div class="meta"><span class="no">#${replicaNo(i)}</span><span class="role">${ROLE[role] || r.speaker}</span><time>${r.timestamp}</time>
+          ${hl ? html`<span class="tag">${icon('quote')}доказательство</span>` : ''}</div>
+        <p>${r.text}</p>
+        ${canSeek ? html`<button type="button" class="seek" data-action="seek" data-index="${i}" aria-label="Перемотать запись к реплике ${replicaNo(i)} (${fmtOffset(offs[i])})">${icon('play')}к записи · ${fmtOffset(offs[i])}</button>` : ''}
       </div>
-      <p>${r.text}</p>
     </li>`);
   }
   return html`
-    ${hasAudio ? html`<div class="audio"><audio id="call-audio" data-keep="audio:${conv.conversation_id}:${conv.audio_url}" src="${conv.audio_url}" controls preload="metadata"></audio>
-      <p class="mu small">Запись звонка. Кнопка «к записи» у реплики перематывает на её время от начала разговора.</p></div>` : ''}
-    ${from > 0 ? html`<p class="mu small">… реплики 1–${from} скрыты</p>` : ''}
+    ${hasAudio ? html`<div class="audio"><div class="audio-head">${icon('phone')}<span>Запись звонка</span></div>
+      <audio id="call-audio" data-keep="audio:${conv.conversation_id}:${conv.audio_url}" src="${conv.audio_url}" controls preload="metadata"></audio>
+      <p class="hint">Кнопка «к записи» у реплики перематывает на её время от начала разговора.</p></div>` : ''}
+    ${from > 0 ? html`<p class="hint center">Реплики 1–${from} скрыты</p>` : ''}
     <ol class="transcript" aria-label="Транскрипт диалога">${list}</ol>
-    ${last < t.length - 1 ? html`<p class="mu small">… ещё ${t.length - 1 - last} реплик после #${replicaNo(last)}</p>` : ''}
-    ${t.length === 0 ? html`<p class="mu">Транскрипт пуст.</p>` : ''}`;
+    ${last < t.length - 1 ? html`<p class="hint center">Ещё реплик после #${replicaNo(last)}: ${t.length - 1 - last}</p>` : ''}
+    ${t.length === 0 ? html`<p class="hint">Транскрипт пуст.</p>` : ''}`;
 }
+
+const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Подсветить и прокрутить к реплике (используется ссылками-доказательствами). */
 export function focusReplicas(indices, range = null) {
@@ -68,10 +74,19 @@ export function focusReplicas(indices, range = null) {
   const first = indices.length ? Math.min(...indices) : range ? range[0] : null;
   if (first === null) return;
   const el = document.getElementById(`r-${first}`);
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.focus({ preventScroll: true });
-  }
+  if (!el) return;
+  el.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'center' });
+  el.focus({ preventScroll: true });
+  // Вспышка добавляется вне разметки, поэтому последующие перерисовки её не повторяют.
+  const targets = indices.length ? indices : [first];
+  targets.forEach((i) => {
+    const m = document.getElementById(`r-${i}`);
+    if (!m) return;
+    m.classList.remove('flash');
+    void m.offsetWidth;
+    m.classList.add('flash');
+    m.addEventListener('animationend', () => m.classList.remove('flash'), { once: true });
+  });
 }
 
 export function seekReplica(index) {

@@ -5,6 +5,7 @@ import { store } from '../store.js';
 import { validateChecklist, round2 } from '../scoring.js';
 import { activeChecklist, checklistLabel, fmtDate } from '../results.js';
 import { saveChecklist, activateChecklist, evaluateMany, toast, fail } from '../actions.js';
+import { icon } from '../icons.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const TYPE = { yesno: 'Да / Нет', scale: 'Шкала' };
@@ -34,17 +35,17 @@ export function listView(s) {
   fams.forEach((f) => f.versions.sort((a, b) => b.version - a.version));
   const act = activeChecklist(s);
   return html`
-    <div class="row sp head"><div><h2>Чек-листы</h2>
+    <div class="page-head"><div><h2>Чек-листы</h2>
       <p class="sub">Оценка запускается активной версией. Сохранение изменений создаёт новую версию — старые оценки остаются привязаны к своей.</p></div>
       <div class="row">
-        ${act ? html`<button type="button" data-action="apply-open">Применить к диалогам…</button>` : ''}
-        <a class="btn p" href="#/checklists/new/edit">Новый чек-лист</a></div></div>
+        ${act ? html`<button type="button" data-action="apply-open">${icon('refresh')}Применить к диалогам…</button>` : ''}
+        <a class="btn p" href="#/checklists/new/edit">${icon('plus')}Новый чек-лист</a></div></div>
     ${fams.map((f) => html`<section class="card mb" aria-label="${f.versions[0].name}">
-      <div class="row sp"><h3>${f.versions[0].name}</h3><span class="mu">${f.versions.length} верс.</span></div>
-      <div class="tw"><table><thead><tr><th scope="col">Версия</th><th scope="col">Критериев</th><th scope="col">Создана</th><th scope="col">Статус</th><th scope="col"><span class="sr">Действия</span></th></tr></thead><tbody>
+      <div class="card-head"><h3>${icon('doc')}${f.versions[0].name}</h3><span class="hint">${f.versions.length} верс.</span></div>
+      <div class="tw"><table class="table"><thead><tr><th scope="col">Версия</th><th scope="col">Критериев</th><th scope="col">Создана</th><th scope="col">Статус</th><th scope="col"><span class="sr">Действия</span></th></tr></thead><tbody>
       ${f.versions.map((v) => html`<tr>
         <td><b>v${v.version}</b></td><td>${v.criteria.length}</td><td>${fmtDate(v.created_at)}</td>
-        <td>${v.active ? html`<span class="b ok">✓ Активная</span>` : html`<span class="mu">—</span>`}</td>
+        <td>${v.active ? html`<span class="b ok">${icon('check')}<span>Активная</span></span>` : html`<span class="hint">—</span>`}</td>
         <td class="row end">
           ${v.active ? '' : html`<button type="button" data-action="cl-activate" data-id="${v.id}">Сделать активной</button>`}
           <a class="btn" href="#/checklists/${encodeURIComponent(v.id)}/edit">Изменить (новая версия)</a>
@@ -62,8 +63,8 @@ export function editorView(s) {
   const ok = !errors.length;
   let lastSection = null;
   return html`
-    <a href="#/checklists" class="back">← К чек-листам</a>
-    <div class="row sp head"><div>
+    <a href="#/checklists" class="back">${icon('arrowLeft')}К чек-листам</a>
+    <div class="page-head"><div>
       <h2>${d.based_on ? `Изменение: ${d.name} (v${d.baseVersion} → новая версия)` : 'Новый чек-лист'}</h2>
       <p class="sub">Критерии, секции, веса и шкалы задаются здесь и сразу используются интерфейсом и оценкой.</p></div></div>
     <section class="card">
@@ -71,9 +72,9 @@ export function editorView(s) {
       <label for="ed-desc">Описание</label><input id="ed-desc" value="${d.description}" data-input="draft-field" data-key="description">
     </section>
     <section class="card mt" aria-labelledby="ed-crit-h">
-      <div class="row sp"><h3 id="ed-crit-h">Критерии (${d.criteria.length})</h3>
-        <span class="b ${scoreSum === 100 ? 'ok' : 'rd'}">${scoreSum === 100 ? '✓' : '✕'} Сумма весов ${scoreSum} / 100</span></div>
-      <div class="bar" role="img" aria-label="Сумма весов ${scoreSum} из 100"><i class="${scoreSum === 100 ? 'ok' : 'rd'}" style="width:${Math.min(100, scoreSum)}%"></i></div>
+      <div class="card-head"><h3 id="ed-crit-h">Критерии (${d.criteria.length})</h3>
+        <span class="b ${scoreSum === 100 ? 'ok' : 'rd'}">${icon(scoreSum === 100 ? 'check' : 'x')}<span>Сумма весов ${scoreSum} / 100</span></span></div>
+      <div class="meter t-${scoreSum === 100 ? 'ok' : 'rd'}" role="img" aria-label="Сумма весов ${scoreSum} из 100"><i style="width:${Math.min(100, scoreSum)}%"></i></div>
       <ol class="ed-list">
       ${d.criteria.map((c, i) => {
         const sec = c.section !== lastSection ? html`<li class="group" aria-hidden="true">${c.section}</li>` : '';
@@ -82,18 +83,18 @@ export function editorView(s) {
           <div><b>${i + 1}. ${c.title || 'Без названия'}</b>
             <div class="mu small">${c.is_flag ? 'флаг грубого нарушения, без баллов' : `${TYPE[c.type]}${c.type === 'scale' ? ' ' + c.scale_steps.join('/') : ''} · вес ${c.weight}`}${c.allow_na ? ' · N/A разрешён' : ''} · id ${c.id}</div>
             <div class="mu small">${c.question}</div></div>
-          <div class="row end">
-            <button type="button" data-action="cr-move" data-i="${i}" data-d="-1" aria-label="Переместить «${c.title}» выше" ${attr('disabled', i === 0)}>↑</button>
-            <button type="button" data-action="cr-move" data-i="${i}" data-d="1" aria-label="Переместить «${c.title}» ниже" ${attr('disabled', i === d.criteria.length - 1)}>↓</button>
-            <button type="button" data-action="cr-edit" data-i="${i}">Изменить</button>
-            <button type="button" class="d" data-action="cr-delete" data-i="${i}" aria-label="Удалить критерий «${c.title}»">Удалить</button>
+          <div class="ed-actions">
+            <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="-1" aria-label="Переместить «${c.title}» выше" title="Выше" ${attr('disabled', i === 0)}>${icon('up')}</button>
+            <button type="button" class="icon-btn" data-action="cr-move" data-i="${i}" data-d="1" aria-label="Переместить «${c.title}» ниже" title="Ниже" ${attr('disabled', i === d.criteria.length - 1)}>${icon('down')}</button>
+            <button type="button" class="btn-sm" data-action="cr-edit" data-i="${i}">${icon('edit')}Изменить</button>
+            <button type="button" class="btn-sm d" data-action="cr-delete" data-i="${i}" aria-label="Удалить критерий «${c.title}»" title="Удалить">${icon('trash')}<span class="btn-label">Удалить</span></button>
           </div></li>`;
       })}
       </ol>
-      <button type="button" data-action="cr-edit" data-i="-1">+ Добавить критерий</button>
+      <button type="button" class="ghost add" data-action="cr-edit" data-i="-1">${icon('plus')}Добавить критерий</button>
     </section>
     <section class="card mt">
-      ${ok ? html`<p class="b ok block">✓ Чек-лист корректен</p>` : html`<div class="errors" role="alert"><b>Исправьте перед сохранением:</b><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>`}
+      ${ok ? html`<p class="notice ok">${icon('check')}<span>Чек-лист корректен</span></p>` : html`<div class="notice rd errors" role="alert">${icon('alert')}<div><b>Исправьте перед сохранением:</b><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div></div>`}
       <label class="check"><input type="checkbox" id="ed-activate" data-change="draft-activate" ${attr('checked', d.activate)}> Сделать новую версию активной</label>
       <div class="row end">
         <a class="btn" href="#/checklists">Отмена</a>
@@ -130,8 +131,8 @@ export function criterionModalView(s, m) {
       ${steps.map((st, i) => html`<div class="row step">
         <label class="sr" for="cm-step-${i}">Ступень ${i + 1}</label><input id="cm-step-${i}" class="num" type="number" min="0" step="any" value="${st}" data-step="${i}">
         <label class="sr" for="cm-label-${i}">Описание ступени ${i + 1}</label><input id="cm-label-${i}" class="grow" value="${(c.scale_labels || {})[st] || ''}" placeholder="Описание ступени">
-        <button type="button" class="d" data-action="cm-step-del" data-i="${i}" aria-label="Удалить ступень ${st}">✕</button></div>`)}
-      <button type="button" data-action="cm-step-add">+ Ступень</button></fieldset>` : ''}
+        <button type="button" class="icon-btn d" data-action="cm-step-del" data-i="${i}" aria-label="Удалить ступень ${st}" title="Удалить ступень">${icon('trash')}</button></div>`)}
+      <button type="button" class="ghost" data-action="cm-step-add">${icon('plus')}Ступень</button></fieldset>` : ''}
     <label class="check"><input type="checkbox" id="cm-na" data-change="cm-rerender" ${attr('checked', c.allow_na)}> Разрешён ответ N/A</label>
     ${c.allow_na ? html`<label for="cm-nacond">Условие N/A</label><textarea id="cm-nacond" rows="2">${c.na_condition}</textarea>` : ''}
     <p class="err" role="alert">${m.error || ''}</p>

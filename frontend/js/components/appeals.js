@@ -9,10 +9,14 @@ import {
   fmtDate, replicaNo, latestEvaluation,
 } from '../results.js';
 import { transcriptView } from './transcript.js';
+import { icon } from '../icons.js';
+import { emptyState } from './ui.js';
 import { createAppeal, resolveAppeal, toast, fail } from '../actions.js';
 
 const STATUS = { pending: 'На рассмотрении', resolved: 'Рассмотрена', outdated: 'Устарела' };
 const tone = (st) => (st === 'pending' ? 'wn' : st === 'outdated' ? 'ne' : 'ok');
+const ST_ICON = { pending: 'clock', resolved: 'check', outdated: 'minus' };
+const statusBadge = (st) => html`<span class="b ${tone(st)}">${icon(ST_ICON[st] || 'circle')}<span>${STATUS[st] || st}</span></span>`;
 
 // ---------- очередь ----------
 export function listView(s) {
@@ -21,11 +25,17 @@ export function listView(s) {
     .sort((a, b) => (a.status === b.status ? Date.parse(b.created_at) - Date.parse(a.created_at) : a.status === 'pending' ? -1 : 1));
   const count = (st) => s.appeals.filter((a) => st === 'all' || a.status === st).length;
   const tab = (k, label) => html`<button type="button" role="tab" aria-selected="${f === k}" class="${f === k ? 'tab on' : 'tab'}" data-action="appeal-filter" data-f="${k}">${label} (${count(k)})</button>`;
+  if (!list.length) {
+    return html`<div class="page-head"><div><h2>Апелляции и пересмотр</h2>
+      <p class="sub">Проверяющий подтверждает или меняет оспоренный ответ, итог пересчитывается автоматически.</p></div></div>
+      <div class="seg" role="tablist" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
+      <div class="card">${emptyState('inbox', f === 'pending' ? 'Очередь пуста' : 'Апелляций нет', 'Откройте оценку диалога и нажмите «Оспорить» у критерия.')}</div>`;
+  }
   return html`
-    <h2>Апелляции и пересмотр</h2>
-    <p class="sub">Проверяющий подтверждает или меняет оспоренный ответ, итог пересчитывается автоматически.</p>
-    <div class="row tabs" role="tablist" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
-    <div class="card tw"><table>
+    <div class="page-head"><div><h2>Апелляции и пересмотр</h2>
+      <p class="sub">Проверяющий подтверждает или меняет оспоренный ответ, итог пересчитывается автоматически.</p></div></div>
+    <div class="seg" role="tablist" aria-label="Фильтр апелляций">${tab('pending', 'На рассмотрении')}${tab('resolved', 'Рассмотренные')}${tab('all', 'Все')}</div>
+    <div class="card tw"><table class="table">
       <caption class="sr">Очередь апелляций</caption>
       <thead><tr><th scope="col">Апелляция</th><th scope="col">Диалог</th><th scope="col">Критерий</th><th scope="col">Исходный ответ</th>
         <th scope="col">Комментарий</th><th scope="col">Статус</th><th scope="col">Решение</th><th scope="col"><span class="sr">Действие</span></th></tr></thead>
@@ -38,12 +48,11 @@ export function listView(s) {
           <td>${c ? c.title : a.criterion_id}</td>
           <td>${answerBadge(c, a.original_answer)}</td>
           <td class="clip">${a.comment}</td>
-          <td><span class="b ${tone(a.status)}">${STATUS[a.status] || a.status}</span></td>
+          <td>${statusBadge(a.status)}</td>
           <td>${a.resolution ? answerBadge(c, a.resolution.new_answer) : '—'}</td>
           <td><a class="btn ${a.status === 'pending' ? 'p' : ''}" href="#/appeals/${encodeURIComponent(a.id)}">${a.status === 'pending' ? 'Рассмотреть' : 'Открыть'}</a></td>
         </tr>`;
       })}
-      ${list.length ? '' : html`<tr><td colspan="8" class="mu">Апелляций нет. Откройте оценку диалога и нажмите «Оспорить» у критерия.</td></tr>`}
       </tbody></table></div>`;
 }
 
@@ -78,12 +87,12 @@ export function reviewView(s) {
   const options = c ? allowedAnswers(c) : [];
 
   return html`
-    <a href="#/appeals" class="back">← К очереди апелляций</a>
-    <div class="row sp head"><div>
-      <h2>Апелляция ${ap.id} <span class="b ${tone(ap.status)}">${STATUS[ap.status]}</span></h2>
+    <a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a>
+    <div class="page-head"><div>
+      <h2>Апелляция ${ap.id} ${statusBadge(ap.status)}</h2>
       <p class="sub">Диалог <a href="#/conversations/${encodeURIComponent(conv.conversation_id)}">${conv.conversation_id}</a> · ${conv.language} · создана ${fmtDate(ap.created_at)}</p>
     </div></div>
-    ${latest && latest.id !== ev.id ? html`<p class="b wn block">Диалог переоценён после подачи апелляции (новая оценка ${latest.id}). Открытые апелляции по старой оценке больше не принимаются.</p>` : ''}
+    ${latest && latest.id !== ev.id ? html`<p class="notice wn">${icon('info')}<span>Диалог переоценён после подачи апелляции (новая оценка ${latest.id}). Открытые апелляции по старой оценке больше не принимаются.</span></p>` : ''}
     <div class="split">
       <div class="col">
         <section class="card" aria-labelledby="orig-h">

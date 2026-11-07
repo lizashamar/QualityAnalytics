@@ -5,11 +5,13 @@ import { store } from '../js/store.js';
 import { SEED_CHECKLIST } from '../js/checklist.seed.js';
 import { calculate } from '../js/scoring.js';
 
+globalThis.window = {location:{search:''}, matchMedia:()=>({matches:false})};
+
 assert.deepEqual(offsets([{timestamp:'00:12'}, {timestamp:'01:30'}, {timestamp:'bad'}]), [12,90,null]);
 assert.deepEqual(offsets([{timestamp:'2026-11-07T10:00:12Z'}, {timestamp:'2026-11-07T10:01:30Z'}]), [0,78]);
 const audio = { currentTime:0, duration:120, readyState:1 };
 let focused = false;
-globalThis.document = { getElementById: (id) => id === 'call-audio' ? audio : { scrollIntoView(){}, focus(){ focused = true; } } };
+globalThis.document = { getElementById: (id) => id === 'call-audio' ? audio : { scrollIntoView(){}, focus(){ focused = true; }, classList:{remove(){},add(){}}, addEventListener(){} } };
 const conv = {conversation_id:'call', audio_url:'audio.wav', transcript:[{timestamp:'00:12',speaker:'operator',text:'Hello'}]};
 store.set({route:{name:'conversation',params:{id:'call'}},conversations:[conv]});
 handlers.click.jump({dataset:{indices:'0'}});
