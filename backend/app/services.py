@@ -6,7 +6,7 @@ import logging
 from . import organizers
 from .config import Settings
 from .db import Database, dumps, loads, now_iso
-from .evaluator import evaluate, normalize_answer
+from .evaluator import evaluate, normalize_answer, validate_saved
 from .llm.base import LLMClient
 from .scoring import calculate, round2, valid_answer
 
@@ -60,10 +60,15 @@ def criterion_result_fields(item: dict) -> dict:
             "na_justification": item.get("na_reason")}
 
 
-def evaluation_out(ev: dict) -> dict:
+def evaluation_out(ev: dict, conv: dict | None = None) -> dict:
     criteria, items = ev["criteria"], ev["items"]
     orig = calculate(criteria, answers_of(items, final=False))
     fin = calculate(criteria, answers_of(items, final=True))
+    failed = ev.get("status") == "error" or any(r["error"] for r in orig["rows"]) or len(items) != len(criteria)
+    if conv is not None and not failed and not ev.get('stale'):
+        _, errors, general = validate_saved(ev, conv)
+        failed = bool(errors or general)
+    unavailable = failed or ev.get("stale", False)
     rows = {r["criterion_id"]: r for r in orig["rows"]}
     key = ev_key(ev["id"])
     return {
@@ -74,11 +79,15 @@ def evaluation_out(ev: dict) -> dict:
         "model": ev["model"],
         "created_at": ev["created_at"],
         "archived": ev["archived"],
-        "total": orig["total"],
-        "gross_flag": orig["gross_flag"],
-        "sections": _sections(orig),
-        "final_total": fin["total"],
-        "final_gross_flag": fin["gross_flag"],
+        "status": "error" if failed else "ok",
+        "error": ev.get("error") or ("Неполная или невалидная оценка. Запустите повторную оценку." if failed else None),
+        "stale": bool(ev.get("stale")),
+        "provenance": ev.get("provenance") or {},
+        "total": None if unavailable else orig["total"],
+        "gross_flag": None if unavailable else orig["gross_flag"],
+        "sections": [] if unavailable else _sections(orig),
+        "final_total": None if unavailable else fin["total"],
+        "final_gross_flag": None if unavailable else fin["gross_flag"],
         "items": [{"id": f"{key}:{i['criterion_id']}", **i, **criterion_result_fields(i), "points": round2(rows[i["criterion_id"]]["points"]) if i["criterion_id"] in rows else 0}
                   for i in items],
         "criteria": criteria,
@@ -116,20 +125,21 @@ def run_evaluation(db: Database, settings: Settings, llm: LLMClient, conversatio
     eid, outdated = db.insert_evaluation({
         "conversation_id": conversation_id, "checklist_id": cl["id"], "checklist_version": cl["version"],
         "model": result["model"], "criteria": cl["criteria"], "items": result["items"],
+        "status": result.get("status", "ok"), "error": result.get("error"), "provenance": result.get("provenance", {}),
         "usage": result["usage"], "warnings": result["warnings"],
     })
     u = result["usage"]
     log.info("evaluation saved id=%s conv=%s checklist=%s calls=%d tokens=%d/%d cost=%s warnings=%d outdated_appeals=%d",
              eid, conversation_id, cl["id"], u["calls"], u["input_tokens"], u["output_tokens"], u["cost_usd"],
              len(result["warnings"]), outdated)
-    return evaluation_out(db.get_evaluation(eid))
+    return evaluation_out(db.get_evaluation(eid), conv)
 
 
 def get_evaluation(db: Database, key: str) -> dict:
     ev = db.get_evaluation(parse_key(key, "ev-", "Оценка"))
     if not ev:
         raise ApiError(404, f"Оценка «{key}» не найдена")
-    return evaluation_out(ev)
+    return evaluation_out(ev, db.get_conversation(ev['conversation_id']))
 
 
 def create_appeal(db: Database, *, evaluation_item_id: str | None, conversation_id: str | None,
@@ -150,7 +160,7 @@ def create_appeal(db: Database, *, evaluation_item_id: str | None, conversation_
         ev = db.latest_evaluation(conversation_id)
         if not ev:
             raise ApiError(404, f"У диалога «{conversation_id}» нет оценки")
-    if ev["archived"]:
+    if ev["archived"] or ev.get("stale") or evaluation_out(ev, db.get_conversation(ev['conversation_id']))['status'] == 'error':
         raise ApiError(409, "Оценка устарела: диалог переоценён, оспорьте новую оценку")
     item = next((i for i in ev["items"] if i["criterion_id"] == criterion_id), None)
     if not item:
@@ -177,7 +187,8 @@ def resolve_appeal(db: Database, key: str, new_answer, reason: str) -> dict:
             raise ApiError(404, f"Апелляция «{key}» не найдена")
         if ap["status"] == "resolved":
             raise ApiError(409, "Апелляция уже рассмотрена")
-        if ap["status"] == "outdated":
+        evaluation = db.get_evaluation(ap["evaluation_id"])
+        if ap["status"] == "outdated" or evaluation.get("stale") or evaluation_out(evaluation, db.get_conversation(evaluation['conversation_id']))['status'] == 'error':
             raise ApiError(409, "Апелляция устарела: диалог переоценён")
         row = c.execute("SELECT criteria_json, items_json FROM evaluations WHERE id = ?", (ap["evaluation_id"],)).fetchone()
         criteria, items = loads(row["criteria_json"], []), loads(row["items_json"], [])

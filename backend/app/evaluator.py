@@ -8,11 +8,14 @@ import json
 import logging
 import re
 import unicodedata
+import time
 from difflib import SequenceMatcher
 from typing import Any
 
-from .llm.base import LLMClient, LLMParseError
-from .prompt import SYSTEM_PROMPT, build_user_prompt
+from .llm.base import LLMClient, LLMError, LLMParseError
+from .llm.schema import EVALUATION_SCHEMA
+from .prompt import SYSTEM_PROMPT, PROMPT_VERSION, build_user_prompt
+from .provenance import conversation_input, digest, input_hash
 from .scoring import valid_answer
 
 log = logging.getLogger("cqa.evaluator")
@@ -127,15 +130,22 @@ def validate_output(data: Any, criteria: list[dict], transcript: list[dict], fuz
                 e.append(f"{cid}: ответ {raw.get('answer')!r} недопустим (ожидается yes/no{'/na' if c.get('allow_na') else ''}).")
             answer = None
         na_reason = raw.get("na_reason")
-        na_reason = str(na_reason).strip() if na_reason not in (None, "") else None
+        na_reason = na_reason.strip() if isinstance(na_reason, str) and na_reason.strip() else None
         if answer == "na" and not na_reason:
             e.append(f"{cid}: для N/A нужно непустое na_reason.")
             answer = None
         if answer != "na":
             na_reason = None
 
+        explanation = raw['explanation'].strip() if isinstance(raw.get('explanation'), str) else ''
+        if not explanation:
+            e.append(f"{cid}: explanation должно содержать обоснование ответа.")
         evidence, quotes = [], []
-        for k, item in enumerate(raw.get("evidence") or []):
+        raw_evidence = raw.get("evidence") or []
+        if not isinstance(raw_evidence, list):
+            e.append(f"{cid}: evidence должно быть массивом цитат.")
+            raw_evidence = []
+        for k, item in enumerate(raw_evidence):
             idx = _int(item.get("index")) if isinstance(item, dict) else _int(item)
             quote = str(item.get("quote") or "") if isinstance(item, dict) else ""
             if idx is None or not 0 <= idx < n:
@@ -157,12 +167,17 @@ def validate_output(data: Any, criteria: list[dict], transcript: list[dict], fuz
             else:
                 checked_range = [a, b]
 
-        if answer is not None and answer != "na" and not evidence and not checked_range:
+        if answer is not None and not evidence and not checked_range:
             e.append(f"{cid}: для ответа нужны evidence с цитатами или checked_range.")
+        positive = answer == "yes" or (isinstance(answer, (int, float)) and not isinstance(answer, bool) and answer > 0)
+        if positive:
+            roles = {"operator"} if c.get("is_flag") else {"operator", "system"}
+            if not any(transcript[i].get("speaker") in roles for i in evidence):
+                e.append(f"{cid}: положительный ответ требует evidence с цитатой действия оператора или системного события.")
 
         out[cid] = {
             "criterion_id": cid, "answer": answer, "final_answer": None,
-            "explanation": str(raw.get("explanation") or "").strip(),
+            "explanation": explanation,
             "evidence": evidence, "evidence_quotes": quotes, "checked_range": checked_range,
             "na_reason": na_reason, "decision": None, "_valid": not e,
         }
@@ -174,8 +189,16 @@ def validate_output(data: Any, criteria: list[dict], transcript: list[dict], fuz
     return out, errs, general
 
 
+def validate_saved(ev: dict, conv: dict):
+    source = (ev.get('provenance') or {}).get('input') or conv
+    raw = [{"criterion_id": i['criterion_id'], "answer": i.get('answer'),
+            "explanation": i.get('explanation'), "evidence": i.get('evidence_quotes', []),
+            "checked_range": i.get('checked_range'), "na_reason": i.get('na_reason')} for i in ev['items']]
+    return validate_output({'items': raw}, ev['criteria'], source.get('transcript') or [], source.get('channel') == 'voice call')
+
+
 def _salvage(c: dict, item: dict | None, n: int) -> dict:
-    """Финальная версия пункта, если и после повтора он невалиден: оставить валидное, не падать."""
+    """Keep diagnostic item data after a failed retry; an error result has no score."""
     if item is None:
         item = {"criterion_id": c["id"], "answer": None, "final_answer": None, "explanation": "",
                 "evidence": [], "evidence_quotes": [], "checked_range": None, "na_reason": None, "decision": None}
@@ -192,6 +215,9 @@ def _add_usage(total: dict, u: dict) -> None:
     total["output_tokens"] += int(u.get("output_tokens") or 0)
     total["duration_ms"] += int(u.get("duration_ms") or 0)
     total["calls"] += 1
+    for key in ("request_id", "served_by"):
+        if u.get(key):
+            total.setdefault(key + "_history", []).append(u[key])
 
 
 def _cost(usage: dict, price_in: float | None, price_out: float | None) -> float | None:
@@ -202,11 +228,20 @@ def _cost(usage: dict, price_in: float | None, price_out: float | None) -> float
 
 def evaluate(llm: LLMClient, conv: dict, criteria: list[dict], *, price_in: float | None = None,
              price_out: float | None = None) -> dict:
-    """-> {items, usage, warnings, model}. Исключения LLMError (сеть, ключ) пробрасываются."""
+    """Return status, diagnostics and provenance; failed attempts never receive a score."""
     transcript = conv.get("transcript") or []
     fuzzy = conv.get("channel") == "voice call"
     user = build_user_prompt(conv, criteria)
     usage = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "duration_ms": 0, "retried": False}
+    provenance = {"input_hash": input_hash(conv), "input": conversation_input(conv),
+                  "prompt_version": PROMPT_VERSION, "system_prompt": SYSTEM_PROMPT, "user_prompt": user,
+                  "criteria_hash": digest(criteria), "provider": llm.provider, "model": llm.model,
+                  "output_schema_hash": digest(EVALUATION_SCHEMA), "attempt_prompts": [],
+                  "max_completion_tokens": getattr(llm, "max_tokens", None)}
+    if not transcript or not any(r.get("speaker") == "operator" and str(r.get("text") or "").strip() for r in transcript):
+        return {"status": "error", "error": "Недостаточно данных: в транскрипте нет реплик оператора.",
+                "items": [], "usage": {**usage, "cost_usd": None, "provider": llm.provider, "model": llm.model},
+                "warnings": [], "provenance": provenance, "model": f"{llm.provider}:{llm.model}"}
     attempts: list[tuple[dict, dict[str, list[str]], list[str]]] = []
     raw_prev = ""
 
@@ -218,7 +253,9 @@ def evaluate(llm: LLMClient, conv: dict, criteria: list[dict], *, price_in: floa
             prompt = (user + "\n\nТвой предыдущий ответ:\n" + raw_prev[:20000] +
                       "\n\nВ нём ошибки, исправь их и верни ПОЛНЫЙ JSON заново (все критерии):\n- " + "\n- ".join(problems))
             usage["retried"] = True
+        started = time.perf_counter()
         try:
+            provenance['attempt_prompts'].append(prompt)
             data, u = llm.complete_json(SYSTEM_PROMPT, prompt)
             raw_prev = json.dumps(data, ensure_ascii=False)
             _add_usage(usage, u)
@@ -227,6 +264,10 @@ def evaluate(llm: LLMClient, conv: dict, criteria: list[dict], *, price_in: floa
             _add_usage(usage, e.usage)
             raw_prev = e.raw
             attempts.append(({}, {}, [str(e)]))
+        except LLMError as e:
+            _add_usage(usage, {"duration_ms": round((time.perf_counter() - started) * 1000)})
+            attempts.append(({}, {}, [str(e)]))
+            break
         items, errs, general = attempts[-1]
         log.info("evaluate conv=%s model=%s attempt=%d tokens_in=%d tokens_out=%d ms=%d errors=%d",
                  conv.get("conversation_id"), llm.model, attempt, usage["input_tokens"], usage["output_tokens"],
@@ -253,4 +294,7 @@ def evaluate(llm: LLMClient, conv: dict, criteria: list[dict], *, price_in: floa
              usage["output_tokens"], usage["cost_usd"])
     usage["model"] = llm.model
     usage["provider"] = llm.provider
-    return {"items": final_items, "usage": usage, "warnings": warnings, "model": f"{llm.provider}:{llm.model}"}
+    failed = bool(warnings)
+    return {"status": "error" if failed else "ok", "error": "Не удалось получить полностью обоснованную оценку. " + " ".join(warnings) if failed else None,
+            "items": final_items, "usage": usage, "warnings": warnings, "provenance": provenance,
+            "model": f"{llm.provider}:{llm.model}"}

@@ -14,8 +14,9 @@ export const checklistLabel = (cl) => (cl ? `${cl.name} · v${cl.version}` : 'н
 
 /** Итоги: исходный (как пришёл в evaluation) и финальный (после решений проверяющего). */
 export function finalResult(s, ev) {
-  const cl = checklistById(s, ev.checklist_id);
-  const criteria = cl ? cl.criteria : [];
+  const saved = checklistById(s, ev.checklist_id);
+  const criteria = ev.criteria || saved?.criteria || [];
+  const cl = saved ? { ...saved, criteria } : criteria.length ? { id:ev.checklist_id, name:ev.checklist_id, version:ev.checklist_version, criteria } : null;
   const appeals = s.appeals.filter((a) => a.evaluation_id === ev.id);
   const decisions = {};
   appeals
@@ -90,6 +91,8 @@ export function scoreBadge(v) {
 
 export const STATUS = {
   none: 'Не оценён',
+  error: 'Ошибка оценки',
+  stale: 'Нужна переоценка',
   evaluated: 'Оценён',
   appeal: 'Апелляция на рассмотрении',
   reviewed: 'Пересмотрен',
@@ -98,6 +101,8 @@ export const STATUS = {
 export function conversationStatus(s, convId) {
   const ev = latestEvaluation(s, convId);
   if (!ev) return 'none';
+  if (ev.stale) return 'stale';
+  if (ev.status === 'error') return 'error';
   const ap = s.appeals.filter((a) => a.evaluation_id === ev.id);
   if (ap.some((a) => a.status === 'pending')) return 'appeal';
   if (ap.some((a) => a.status === 'resolved')) return 'reviewed';
@@ -112,7 +117,7 @@ export function fmtDate(iso) {
 /** Оценки диалога по разным версиям чек-листа (из s.history): последние две версии, по возрастанию.
  *  Возвращает null, если версия одна. Итог — с учётом решения проверяющего, если оно есть. */
 export function versionTrail(s, convId) {
-  const history=(s.history||[]).filter(h=>h.conversation_id===convId);
+  const history=(s.history||[]).filter(h=>h.conversation_id===convId&&h.status!=='error'&&!h.stale);
   const current=latestEvaluation(s,convId)?.checklist_id||[...history].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]?.checklist_id;
   const family=s.checklists?.find(c=>c.id===current)?.family_id;
   const list=history.filter(h=>!family||s.checklists.some(c=>c.id===h.checklist_id&&c.family_id===family))

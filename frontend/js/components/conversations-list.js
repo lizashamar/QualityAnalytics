@@ -11,13 +11,13 @@ import {
 import { scoreRing, emptyState } from './ui.js';
 import { FILTER_DEFAULTS, PAGE_SIZE, matchesRow, sortRows, explorerHref } from '../design/explorer.js';
 
-const STATUS_TONE = { none: 'ne', evaluated: 'ok', appeal: 'wn', reviewed: 'ac' };
-const STATUS_ICON = { none: 'circle', evaluated: 'check', appeal: 'clock', reviewed: 'scale' };
+const STATUS_TONE = { none: 'ne', evaluated: 'ok', appeal: 'wn', reviewed: 'ac', error:'rd', stale:'wn' };
+const STATUS_ICON = { none: 'circle', evaluated: 'check', appeal: 'clock', reviewed: 'scale', error:'alert', stale:'refresh' };
 
 export function rowsFor(s) {
   return s.conversations.map((conv) => {
     const ev = latestEvaluation(s, conv.conversation_id);
-    const R = ev ? finalResult(s, ev) : null;
+    const R = ev && ev.status !== 'error' && !ev.stale ? finalResult(s, ev) : null;
     return { conv, ev, R, status: conversationStatus(s, conv.conversation_id) };
   });
 }
@@ -91,6 +91,7 @@ export function view(s) {
       <button type="submit" class="p" ${attr('disabled', busy)}>${s.importing ? 'Загрузка…' : 'Загрузить группу'}</button>
       <span class="mu small">DEV или группа контрольного набора. Оценка запускается отдельно.</span>
     </form>` : ''}
+    ${!config.USE_MOCK?html`<details class="card demo-details"><summary>Сдать результаты организаторам</summary><p class="hint">JSON 1.0 по официальному чек-листу: DEV — 65 диалогов, контрольный набор — 10. Ошибки сохраняются отдельными записями без балла.</p><form class="submission-export" data-submit="submission-export" aria-label="Экспорт результатов"><div><label for="export-team">Команда</label><input id="export-team" name="team_name" value="kudafest" required></div><div><label for="export-group">Группа API</label><input id="export-group" name="group_id" value="${s.datasetGroup||config.GROUP_ID||'DEV'}" required></div><div><label for="export-split">Набор</label><select id="export-split" name="split"><option value="dev">DEV · 65</option><option value="prod">Контрольный · 10</option></select></div><button type="submit">${icon('download')}Скачать results.json</button></form><p class="hint" role="status" data-export-status></p></details>`:''}
     <div class="filters card" role="search" aria-label="Фильтры диалогов">
       <div class="search">${icon('search')}<label class="sr" for="f-q">Поиск</label>
         <input id="f-q" type="search" placeholder="Поиск по ID и тексту реплик" value="${f.q}" data-input="filter" data-key="q"></div>
@@ -132,6 +133,21 @@ export function view(s) {
 
 export const handlers = {
   submit: {
+    async 'submission-export'(form) {
+      const button=form.querySelector('button[type="submit"]'), status=form.parentElement.querySelector('[data-export-status]');
+      if (button.disabled) return;
+      const options=Object.fromEntries(new FormData(form));
+      button.disabled=true; status.textContent='Проверяем полноту набора и доказательства…';
+      try {
+        const result=await api.exportResults(options);
+        const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)+'\n'],{type:'application/json;charset=utf-8'}));
+        const link=document.createElement('a');link.href=url;link.download='results.json';link.click();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+        const errors=result.results.filter(r=>r.status==='error').length;
+        status.textContent=`Скачано ${result.results.length} записей. Ошибок: ${errors}. Сохраните файл в results/${options.split}/results.json и проверьте перед push.`;
+      } catch(e) { status.textContent=e.message||'Экспорт не выполнен. Повторите позже.'; }
+      finally { button.disabled=false; }
+    },
     async 'dataset-import'(form) {
       if (store.get().importing || store.get().applying) return;
       const group = form.querySelector('[name="group_id"]').value.trim();
@@ -139,6 +155,7 @@ export const handlers = {
       store.set({importing:true, datasetGroup:group});
       try {
         const result = await api.importDataset(group);
+        const url = new URL(location.href); url.searchParams.set('group', result.group_id || group); history.replaceState(null,'',url);
         await loadAll();
         updateFilters(FILTER_DEFAULTS);
         store.set({selectedConversations:[], batchSummary:null});

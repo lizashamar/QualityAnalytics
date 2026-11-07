@@ -48,7 +48,8 @@ class OpenAICompatClient(LLMClient):
             message = choice["message"]
             u = data.get("usage") or {}
             usage = {"input_tokens": u.get("prompt_tokens", 0) or 0,
-                     "output_tokens": u.get("completion_tokens", 0) or 0}
+                     "output_tokens": u.get("completion_tokens", 0) or 0,
+                     "request_id": r.headers.get("x-request-id"), "served_by": data.get("model")}
             if message.get("refusal"):
                 raise LLMParseError("Модель отказалась оценивать диалог", "", usage)
             text = message.get("content") or ""

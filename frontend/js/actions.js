@@ -85,9 +85,11 @@ export async function ensureReviewContext(appealId) {
           || s.reviewConversations?.[appeal.conversation_id] || api.getConversation(appeal.conversation_id),
       ]);
       if (!evaluation || !conversation) throw new Error('Оценка или диалог больше недоступны.');
+      const snapshot = evaluation.provenance?.input;
+      const evidenceConversation = snapshot ? { ...conversation, ...snapshot } : conversation;
       store.set((current) => ({
         evaluations: { ...current.evaluations, [evaluation.id]: evaluation },
-        reviewConversations: { ...current.reviewConversations, [conversation.conversation_id]: conversation },
+        reviewConversations: { ...current.reviewConversations, [conversation.conversation_id]: evidenceConversation },
         reviewLoads: { ...current.reviewLoads, [appealId]: { status: 'ready' } },
       }));
     } catch (e) {
@@ -110,6 +112,7 @@ export async function runEvaluation(conversationId, checklistId, { batch = false
     putEvaluation(ev);
     store.set({ appeals: await api.listAppeals() });
     if (!store.get().applying) loadHistory(); // при массовой оценке — один раз в конце
+    if (ev.status === 'error' || ev.stale) throw new Error(ev.error || 'Диалог изменился во время оценки. Повторите оценку.');
     return ev;
   } finally {
     store.set((st) => { const r = { ...st.running }; delete r[conversationId]; return { running: r }; });

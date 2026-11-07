@@ -30,6 +30,8 @@ class JobManager:
         def one(cid: str):
             try:
                 ev = work(cid)
+                if ev.get("status") == "error" or ev.get("stale"):
+                    raise ValueError(ev.get("error") or "Исходный диалог изменился во время оценки.")
                 with self._lock:
                     job["done"] += 1
                     u = ev.get("usage") or {}

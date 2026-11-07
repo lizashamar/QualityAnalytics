@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from .provenance import input_hash
+
 SEED_PATH = Path(__file__).with_name("seed_checklist.json")
 
 SCHEMA = {
@@ -48,6 +50,10 @@ SCHEMA = {
         "usage_json": "TEXT",
         "warnings_json": "TEXT",
         "archived": "INTEGER NOT NULL DEFAULT 0",
+        "status": "TEXT NOT NULL DEFAULT 'ok'",
+        "error": "TEXT",
+        "stale": "INTEGER NOT NULL DEFAULT 0",
+        "provenance_json": "TEXT",
     },
     "appeals": {
         "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -200,6 +206,10 @@ class Database:
         ts = now_iso()
         with self.tx() as c:
             for rec in records:
+                previous = c.execute("SELECT * FROM conversations WHERE conversation_id = ?", (rec["conversation_id"],)).fetchone()
+                if previous and input_hash(self._conversation(previous)) != input_hash(rec):
+                    c.execute("UPDATE evaluations SET stale = 1 WHERE conversation_id = ?", (rec["conversation_id"],))
+                    c.execute("UPDATE appeals SET status = 'outdated' WHERE conversation_id = ? AND status = 'open'", (rec["conversation_id"],))
                 c.execute(
                     "INSERT INTO conversations (conversation_id, channel, language, transcript_json, audio_url, dataset_group, imported_at)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(conversation_id) DO UPDATE SET channel=excluded.channel,"
@@ -217,20 +227,26 @@ class Database:
             "checklist_version": r["checklist_version"], "model": r["model"], "created_at": r["created_at"],
             "criteria": loads(r["criteria_json"], []), "items": loads(r["items_json"], []),
             "usage": loads(r["usage_json"], {}), "warnings": loads(r["warnings_json"], []), "archived": bool(r["archived"]),
+            "status": r["status"], "error": r["error"], "stale": bool(r["stale"]),
+            "provenance": loads(r["provenance_json"], {}),
         }
 
     def insert_evaluation(self, ev: dict) -> tuple[int, int]:
         """Сохраняет новую оценку, архивирует прежние по диалогу, открытые апелляции -> outdated.
         Возвращает (id оценки, число устаревших апелляций)."""
         with self.tx() as c:
+            current = c.execute("SELECT * FROM conversations WHERE conversation_id = ?", (ev["conversation_id"],)).fetchone()
+            provenance = ev.get("provenance") or {}
+            stale = bool(current and provenance.get("input_hash") and input_hash(self._conversation(current)) != provenance["input_hash"])
             c.execute("UPDATE evaluations SET archived = 1 WHERE conversation_id = ? AND archived = 0", (ev["conversation_id"],))
             n = c.execute("UPDATE appeals SET status = 'outdated' WHERE conversation_id = ? AND status = 'open'",
                           (ev["conversation_id"],)).rowcount
             cur = c.execute(
                 "INSERT INTO evaluations (conversation_id, checklist_id, checklist_version, model, created_at, criteria_json,"
-                " items_json, usage_json, warnings_json, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                " items_json, usage_json, warnings_json, status, error, stale, provenance_json, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
                 (ev["conversation_id"], ev["checklist_id"], ev["checklist_version"], ev["model"], now_iso(),
-                 dumps(ev["criteria"]), dumps(ev["items"]), dumps(ev["usage"]), dumps(ev["warnings"])),
+                 dumps(ev["criteria"]), dumps(ev["items"]), dumps(ev["usage"]), dumps(ev["warnings"]),
+                 ev.get("status", "ok"), ev.get("error"), int(stale), dumps(provenance)),
             )
             return cur.lastrowid, n
 

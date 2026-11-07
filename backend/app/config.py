@@ -46,6 +46,8 @@ class Settings:
     dataset_path: str = "dataset.json"
     db_path: str = "cqa.db"
     frontend_dir: str = str(FRONTEND_DIR)
+    team_name: str = ""
+    audio_allowed_hosts: str = ""
 
     @property
     def dataset_file(self) -> Path:
@@ -68,6 +70,8 @@ def load_settings() -> Settings:
     env = {**_load_dotenv(BACKEND_DIR / ".env"), **os.environ}
     provider = (env.get("LLM_PROVIDER") or "mock").strip().lower()
     return Settings(
+        team_name=(env.get("TEAM_NAME") or "").strip(),
+        audio_allowed_hosts=(env.get("AUDIO_ALLOWED_HOSTS") or "").strip(),
         llm_provider=provider,
         llm_model=(env.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, "")).strip(),
         llm_api_key=(env.get("LLM_API_KEY") or "").strip(),

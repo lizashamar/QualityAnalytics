@@ -105,6 +105,7 @@ function grossBanner(R, ev) {
 }
 
 export function scorePanelView(s, conv, ev) {
+  if (ev.stale || ev.status === 'error') return html`<section class="card" role="alert"><h3>${ev.stale?'Диалог изменился — нужна переоценка':'Оценка не выполнена'}</h3><p>${ev.stale?'Сохранённый результат относится к другой версии транскрипта. Он исключён из аналитики и экспорта успешных оценок.':ev.error||'Не удалось получить обоснованные ответы по всем критериям.'}</p><p class="hint">Выберите чек-лист и нажмите «Переоценить». Ошибка обработки не считается нулевым баллом.</p></section>`;
   const R = finalResult(s, ev);
   const allowAppeal=latestEvaluation(s,conv.conversation_id)?.id===ev.id;
   const active = activeChecklist(s);

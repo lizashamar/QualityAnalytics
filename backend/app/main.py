@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import json
 from pathlib import Path
 from typing import Literal, Union
 
@@ -26,6 +27,8 @@ from .llm import LLMClient, LLMError, make_client
 from .organizers import OrganizerError
 from .scoring import normalize_criterion, validate_checklist
 from .services import ApiError
+from .audio import AudioProxy
+from .submission import build_submission
 
 log = logging.getLogger("cqa")
 
@@ -115,9 +118,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     if not logging.getLogger().handlers:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # Transport INFO messages include signed organizer and audio URLs.
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('httpcore').setLevel(logging.WARNING)
     db = Database(settings.db_file)
     db.migrate()
     jobs = JobManager()
+    audio = AudioProxy(settings.audio_allowed_hosts.split(','))
     llm_lock = threading.Lock()
     llm_holder: dict[str, LLMClient] = {}
 
@@ -178,6 +185,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(404, f"Диалог «{conversation_id}» не найден")
         return c
 
+    @api.get("/conversations/{conversation_id}/audio")
+    def conversation_audio(conversation_id: str, request: Request):
+        c = db.get_conversation(conversation_id)
+        if not c:
+            raise ApiError(404, "Диалог не найден")
+        return audio.stream(c.get('audio_url'), request.headers.get('range'))
+
+    @api.get("/results/export")
+    def export_results(group_id: str, split: Literal['dev', 'prod'], team_name: str | None = None, checklist_id: str = 'cl-chat-quality-v1'):
+        try:
+            payload = build_submission(db, group_id, team_name if team_name is not None else settings.team_name, split, checklist_id)
+        except ValueError as e:
+            raise ApiError(400, str(e)) from None
+        return Response(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + '\n',
+                        media_type='application/json; charset=utf-8',
+                        headers={'Content-Disposition': 'attachment; filename="results.json"', 'Cache-Control': 'no-store'})
+
     @api.post("/datasets/import")
     def import_dataset(body: ImportIn):
         return services.import_dataset(db, settings, body.group_id.strip())
@@ -212,14 +236,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @api.get("/evaluations")
     def list_evaluations(group_id: str | None = None, latest: int = 1):
-        return [services.evaluation_out(e) for e in db.list_latest_evaluations(group_id or None)]
+        return [services.evaluation_out(e, db.get_conversation(e['conversation_id'])) for e in db.list_latest_evaluations(group_id or None)]
 
     @api.get("/evaluations/latest")
     def latest_evaluation(conversation_id: str, checklist_id: str | None = None):
         ev = db.latest_evaluation(conversation_id, checklist_id or None)
         if not ev:
             raise ApiError(404, "Оценки нет")
-        return services.evaluation_out(ev)
+        return services.evaluation_out(ev, db.get_conversation(ev['conversation_id']))
 
     @api.post("/evaluations/batch")
     def batch(body: BatchIn):
@@ -229,12 +253,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ids = [c["conversation_id"] for c in db.list_conversations()]
         else:
             raise ApiError(400, "Укажите conversation_ids или all: true")
-        if body.only_missing:
-            done = {e["conversation_id"] for e in db.list_latest_evaluations()}
-            ids = [i for i in ids if i not in done]
         cl = db.get_checklist(body.checklist_id) if body.checklist_id else db.active_checklist()
         if not cl:
             raise ApiError(404, "Чек-лист не найден")
+        if body.only_missing:
+            done = {e['conversation_id'] for e in db.list_latest_evaluations()
+                    if e['checklist_id'] == cl['id'] and not e.get('stale')
+                    and services.evaluation_out(e, db.get_conversation(e['conversation_id']))['status'] == 'ok'}
+            ids = [i for i in ids if i not in done]
         unknown = [i for i in ids if not db.get_conversation(i)]
         client = llm()  # ошибки конфигурации модели — сразу, до запуска фона
         job_id = jobs.start(ids, lambda cid: services.run_evaluation(db, settings, client, cid, cl["id"]), settings.eval_concurrency)

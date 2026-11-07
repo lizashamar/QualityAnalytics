@@ -46,7 +46,7 @@ export function view(s) {
         <select id="card-cl" data-change="card-checklist" ${attr('disabled',busy||external)}>
           ${versions.map((c) => html`<option value="${c.id}" ${attr('selected', c.id === selected)}>${checklistLabel(c)}${c.active ? ' (активная)' : ''}</option>`)}
         </select>
-        <button type="button" class="p" data-action="evaluate" data-id="${id}" ${attr('disabled', busy || !selected || external)} aria-busy="${running}">
+        <button type="button" class="p" data-action="evaluate" data-id="${id}" ${attr('disabled', busy || !selected || external)} aria-busy="${String(running)}">
           ${icon(ev ? 'refresh' : 'sparkle')}${running ? 'Оцениваем…' : ev ? 'Переоценить' : 'Оценить'}</button>
       </div>
     </div>

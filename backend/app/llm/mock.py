@@ -65,6 +65,8 @@ class MockClient(LLMClient):
         name = f"{c.get('title', '')} {c.get('question', '')}".lower()
         ev = lambda r: {"index": r["index"], "quote": r["text"][:80]}
         def res(answer, evidence=(), rng=None, na_reason=None, why=""):
+            if answer == 'na' and not evidence and rng is None:
+                rng = [0, last]
             label = {"yes": "Да", "no": "Нет", "na": "N/A"}.get(answer, str(answer))
             if c.get("is_flag") and answer in ("yes", "no"):
                 label = "Нарушение выявлено" if answer == "yes" else "Нарушение не выявлено"

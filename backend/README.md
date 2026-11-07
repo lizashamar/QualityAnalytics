@@ -88,6 +88,14 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 `resolve` проверяет `new_answer` по снимку критериев этой оценки, причина обязательна, повторно
 закрыть нельзя (`409`). В ответе `decision.previous_total` и `decision.final_total`.
 При повторной оценке диалога открытые апелляции по нему становятся `outdated`.
+При изменении исходного транскрипта прежние оценки получают `stale: true`; открытые апелляции
+тоже устаревают. Снимок транскрипта, хеш входа, версия и текст промпта, параметры и идентификаторы
+запросов сохраняются с новой оценкой. Обновление одной лишь ссылки аудио не меняет её применимость.
+
+Невалидный ответ после повтора, отказ модели и ошибка сети сохраняются как `status: "error"` с
+`error` и `total: null`, а не как нулевой балл. HTTP 200 у `/evaluations` означает сохранённую попытку:
+проверяйте её `status` и `stale`. Батчи и CLI считают такие попытки неуспешными; интерфейс предлагает
+повторную оценку и исключает их из показателей качества.
 
 ## Смена провайдера модели (`backend/.env`)
 
@@ -133,8 +141,10 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 |---|---|---|
 | GET | `/api/conversations?group_id=` | диалоги |
 | GET | `/api/conversations/{id}` | диалог |
+| GET | `/api/conversations/{id}/audio` | поток записи с Range; разрешение HTML-страницы плеера |
 | POST | `/api/datasets/import` `{group_id}` | импорт у организаторов → `{imported, total, skipped}` |
 | GET | `/api/checklists` | все версии |
+| GET | `/api/results/export?group_id=DEV&split=dev&team_name=kudafest` | файл results.json в формате организаторов |
 | GET | `/api/checklists/compare?from=&to=` | изменения критериев и сравнение оценок двух версий |
 | POST | `/api/checklists` `{name, criteria, family_id?, activate?}` | новая версия (version = max+1) |
 | POST | `/api/checklists/{id}/activate` | сделать активной |
@@ -156,6 +166,16 @@ $r.decision          # previous_total, final_total, new_answer, reason, resolved
 `404`, `409` (дубль или повторное решение), `502` (модель или API организаторов), текст — в `detail`.
 
 ## Проверка
+
+Экспорт и проверка сдаваемого JSON описаны в [порядке сдачи](../README.md#submit-organizer-results).
+В PowerShell из `backend/`: `python -m app.submission --group DEV --split dev --team kudafest --evaluate`.
+Для экспорта сохранённых результатов уберите `--evaluate`. Проверка:
+`python -m app.submission --group DEV --split dev --validate ..\results\dev\results.json`.
+Апелляции не подменяют исходные AI-ответы.
+
+`AUDIO_ALLOWED_HOSTS` перечисляет дополнительные доверенные домены аудио. Для текущих страниц
+организаторов используется `freedomholdingcorporation.crm11.dynamics.com`. Прокси не принимает
+произвольный URL от браузера, разрешает HTTPS и проверяет домены, адреса и каждое перенаправление.
 
 Тесты API, фронтенда и браузерные сценарии хранятся вне рабочего дерева.
 Инструкции по отдельному QA-набору приведены в [корневом README](../README.md#quality-assurance).

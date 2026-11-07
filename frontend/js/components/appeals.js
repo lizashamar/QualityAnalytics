@@ -60,7 +60,8 @@ export function reviewView(s) {
   const ap = s.appeals.find((a) => a.id === id);
   if (!ap) return html`<a href="#/appeals" class="back">← К очереди</a><h2>Апелляция не найдена</h2>`;
   const ev = s.evaluations[ap.evaluation_id];
-  const conv = s.conversations.find((c) => c.conversation_id === ap.conversation_id) || s.reviewConversations?.[ap.conversation_id];
+  const current = s.conversations.find((c) => c.conversation_id === ap.conversation_id) || s.reviewConversations?.[ap.conversation_id];
+  const conv = current && ev?.provenance?.input ? { ...current, ...ev.provenance.input } : current;
   if (!ev || !conv) {
     const load = s.reviewLoads?.[id];
     return html`<a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a>
@@ -70,6 +71,7 @@ export function reviewView(s) {
         : html`<section class="card" aria-busy="true" aria-label="Загрузка материалов апелляции"><p role="status">Загружаем оценку и диалог…</p>${skeleton(4)}</section>`}`;
   }
   const cl = checklistById(s, ev.checklist_id);
+  if (ev.stale && !ev.provenance?.input) return html`<a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a><section class="card"><h2>Исходный диалог изменился</h2><p>У этой старой оценки нет сохранённого снимка транскрипта. Текущий текст не используется как доказательство прежнего решения. Для новой проверки откройте диалог и запустите оценку.</p><a class="btn" href="#/conversations/${encodeURIComponent(ap.conversation_id)}">Открыть диалог</a></section>`;
   const c = criterionOf(cl, ap.criterion_id);
   const item = ev.items.find((i) => i.criterion_id === ap.criterion_id);
   if (!item) return html`<a href="#/appeals" class="back">${icon('arrowLeft')}К очереди апелляций</a>

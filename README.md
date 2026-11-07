@@ -34,7 +34,44 @@ Credentials, local datasets and databases are excluded from Git.
   reviewer adjustments remain separate from the original scores.
 
 Both themes use the shared [design system](DESIGN.md) and locally served CoFo Sans font.
-[Product context](PRODUCT.md) describes data boundaries and supported workflows.
+The API workspace uses organizer datasets and persisted AI evaluations. The synthetic demo is
+separate and never supplies submission scores.
+
+## Submit organizer results
+
+The exporter uses the unchanged official checklist, original AI answers, exact dataset IDs,
+one-based evidence indices and the organizer's JSON 1.0 schema. Set `TEAM_NAME=kudafest` in
+`backend/.env`, or pass `--team`. From the repository root:
+
+```sh
+PYTHONPATH=backend .venv/bin/python -m app.import_dataset DEV
+PYTHONPATH=backend .venv/bin/python -m app.submission --group DEV --split dev --team kudafest --evaluate
+PYTHONPATH=backend .venv/bin/python -m app.submission --group DEV --split dev --validate results/dev/results.json
+```
+
+`--evaluate` sends the selected group to your configured model API and saves new evaluations.
+Without it, export only reads saved scores and does not call the model.
+The DEV file must contain 65 records (60 chats and 5 calls). After the control dataset is released,
+replace `CONTROL_GROUP` with its actual API group ID:
+
+```sh
+PYTHONPATH=backend .venv/bin/python -m app.import_dataset CONTROL_GROUP
+PYTHONPATH=backend .venv/bin/python -m app.submission --group CONTROL_GROUP --split prod --team kudafest --evaluate
+PYTHONPATH=backend .venv/bin/python -m app.submission --group CONTROL_GROUP --split prod --validate results/prod/results.json
+```
+
+PROD requires exactly 10 records. Its results file is generated only from the real control dataset;
+there are no placeholder control scores. In **Диалоги → Сдать результаты организаторам**, the same
+exporter can download `results.json`; save it under `results/dev/` or `results/prod/`.
+
+Failed, missing, stale or unsupported evaluations remain explicit `status: "error"` records with
+`score: null`. An export containing errors returns exit code 1; invalid configuration, counts or
+schema return 2 and do not overwrite the output file. Inspect failures and reevaluate before
+submission. Validation checks coverage, value types, evidence bounds, recomputed totals and the
+critical flag. Demo evaluations and modified checklists cannot be exported as successful scores.
+
+Commit and push both result files to the public repository before the organizer deadline, and
+confirm they are visible on GitHub. Exporting or committing locally is not submission.
 
 ## Synthetic demo
 
@@ -45,6 +82,9 @@ user records or the active checklist. API datasets remain separate.
 
 Demo audio is a generated test signal, not spoken dialogue. The player supports seeking,
 position preservation, source retry and timestamp mismatch warnings.
+Real call audio is streamed through the backend, which resolves organizer HTML player pages,
+supports byte ranges and refreshes expired cached media URLs. Additional media hosts must be
+listed in `AUDIO_ALLOWED_HOSTS`; local/private network destinations are rejected.
 [Scenario verification and remaining improvements](docs/design/SCENARIOS-AUDIO-QA.md) describe
 what was checked and what still needs real speech data.
 

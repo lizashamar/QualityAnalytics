@@ -113,8 +113,16 @@ def _pts(score: dict, cid: str):
     return round2(r["points"]) if r and r["applicable"] else None
 
 
+def _usable(ev: dict) -> bool:
+    return (ev.get('status', 'ok') == 'ok' and not ev.get('stale')
+            and len(ev['items']) == len(ev['criteria'])
+            and not any(r['error'] for r in calculate(ev['criteria'], _answers(ev['items'], False))['rows']))
+
+
 def compare_evaluations(evs_from: dict[str, dict], evs_to: dict[str, dict]) -> dict:
     """evs_*: conversation_id -> evaluation (как из db._evaluation). Возвращает {summary, rows}."""
+    evs_from = {k: e for k, e in evs_from.items() if _usable(e)}
+    evs_to = {k: e for k, e in evs_to.items() if _usable(e)}
     both = sorted(set(evs_from) & set(evs_to))
     rows = []
     for cid in both:
@@ -163,7 +171,7 @@ def compare_evaluations(evs_from: dict[str, dict], evs_to: dict[str, dict]) -> d
 
 
 def compare_checklists(db: Database, from_id: str, to_id: str) -> dict:
-    from .services import ApiError  # локально: services импортирует много всего
+    from .services import ApiError, evaluation_out
     a, b = db.get_checklist(from_id), db.get_checklist(to_id)
     if not a:
         raise ApiError(404, f"Чек-лист «{from_id}» не найден")
@@ -171,7 +179,10 @@ def compare_checklists(db: Database, from_id: str, to_id: str) -> dict:
         raise ApiError(404, f"Чек-лист «{to_id}» не найден")
     if a["id"] == b["id"]:
         raise ApiError(400, "Выберите две разные версии чек-листа")
-    result = compare_evaluations(db.latest_evaluations_by_checklist(a["id"]), db.latest_evaluations_by_checklist(b["id"]))
+    def current(cl):
+        return {cid: ev for cid, ev in db.latest_evaluations_by_checklist(cl['id']).items()
+                if evaluation_out(ev, db.get_conversation(cid))['status'] == 'ok'}
+    result = compare_evaluations(current(a), current(b))
     brief = lambda cl: {"id": cl["id"], "name": cl["name"], "version": cl["version"], "family_id": cl["family_id"],  # noqa: E731
                         "created_at": cl["created_at"], "criteria": len(cl["criteria"])}
     return {"from": brief(a), "to": brief(b), "diff": diff_criteria(a["criteria"], b["criteria"]), **result}
@@ -180,7 +191,10 @@ def compare_checklists(db: Database, from_id: str, to_id: str) -> dict:
 def evaluation_history(db: Database, group_id: str | None = None) -> list[dict]:
     """По каждому диалогу — последняя оценка по каждой версии чек-листа (для «v1: 75 → v2: 68»)."""
     out = []
+    from .services import evaluation_out
     for ev in db.latest_evaluations_per_version(group_id):
+        if not _usable(ev) or evaluation_out(ev, db.get_conversation(ev['conversation_id']))['status'] != 'ok':
+            continue
         s = _score(ev)
         out.append({"conversation_id": ev["conversation_id"], "evaluation_id": f"ev-{ev['id']}",
                     "checklist_id": ev["checklist_id"], "checklist_version": ev["checklist_version"],

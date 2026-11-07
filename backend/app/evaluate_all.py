@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .config import load_settings
 from .db import Database
 from .llm import LLMError, make_client
-from .services import ApiError, run_evaluation
+from .services import ApiError, run_evaluation, evaluation_out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,7 +30,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     ids = [c["conversation_id"] for c in db.list_conversations(a.group)]
     if a.only_missing:
-        done = {e["conversation_id"] for e in db.list_latest_evaluations(a.group)}
+        done = {e['conversation_id'] for e in db.list_latest_evaluations(a.group)
+                if e['checklist_id'] == cl['id'] and not e.get('stale')
+                and evaluation_out(e, db.get_conversation(e['conversation_id']))['status'] == 'ok'}
         ids = [i for i in ids if i not in done]
     try:
         llm = make_client(s)
@@ -45,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
             cid = futs[f]
             try:
                 ev = f.result()
+                if ev.get("status") == "error" or ev.get("stale"):
+                    raise ValueError(ev.get("error") or "Исходный диалог изменился во время оценки.")
                 ok += 1
                 u = ev["usage"]
                 cost += u.get("cost_usd") or 0

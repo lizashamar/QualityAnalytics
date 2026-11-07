@@ -351,6 +351,8 @@
 .cqa-app .demo-details { margin-top:28px; color:var(--cqa-muted); font-size:12px; }
 .cqa-app .demo-details summary { cursor:pointer; min-height:28px; }
 .cqa-app .demo-details p { margin:12px 0; }
+.cqa-app .submission-export { display:flex; align-items:flex-end; flex-wrap:wrap; gap:var(--cqa-s-3); }
+.cqa-app .submission-export > div { flex:1 1 140px; min-width:0; }
 @keyframes cqa-dialog-enter { from { opacity:0; transform:translateY(6px) scale(.99); } to { opacity:1; transform:none; } }
 @keyframes cqa-drawer-enter { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:none; } }
 

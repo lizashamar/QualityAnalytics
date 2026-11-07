@@ -1,6 +1,7 @@
 import { trustedConstant } from './html.js';
 
 const P = {
+  download: '<path d="M8 17H5V4h14v13h-3M12 8v12m-4-4 4 4 4-4"/>',
   check: '<path d="M5 12.5l4.2 4.2L19 7"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   half: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>',

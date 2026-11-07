@@ -194,6 +194,8 @@ Criterion rows align the title, inline weight input and action buttons to the sa
 
 Conversation rows group identity, transcript preview, metadata, state and a right-aligned score. Selection remains visible across filtering and pagination. Active filter chips describe removable conditions, and metric drill-down preserves investigation context.
 
+Failed evaluations use an explicit error label and retry guidance, never a zero score or a green success state. Changed transcripts use “Нужна переоценка”; failed and stale results are excluded from quality metrics. Historical evidence uses the input and criterion snapshots saved with its evaluation. Submission export is secondary to investigation and lives in a labeled disclosure on the conversations page.
+
 Charts use labeled scales, semantic thresholds and an accessible data alternative. Latest-score trends must describe their actual time coverage. Transcripts differentiate participants, retain replica numbers and connect evidence to highlighted messages and audio offsets. Reviewer decisions show original, proposed and final results distinctly.
 
 Dialogs use native focus containment and Escape. The command palette supports keyboard navigation. Short state transitions use the shared CSS motion tokens; reduced-motion disables animations and transitions. Do not replay page entrances or number animations during routine work.

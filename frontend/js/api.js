@@ -29,6 +29,7 @@ async function http(method, path, body) {
 const normAppeal = (a) => (a && a.status === 'open' ? { ...a, status: 'pending' } : a);
 
 let activeGroup = config.GROUP_ID;
+const withRemoteAudio = c => c?.audio_url ? { ...c, audio_url:config.API_BASE + `/conversations/${enc(c.conversation_id)}/audio` } : c;
 
 const remote = {
   async importDataset(groupId) {
@@ -36,8 +37,8 @@ const remote = {
     activeGroup = groupId;
     return result;
   },
-  getConversations: () => http('GET', `/conversations${qs({ group_id: activeGroup })}`),
-  getConversation: (id) => http('GET', `/conversations/${enc(id)}`),
+  getConversations: () => http('GET', `/conversations${qs({ group_id: activeGroup })}`).then(items=>items.map(withRemoteAudio)),
+  getConversation: (id) => http('GET', `/conversations/${enc(id)}`).then(withRemoteAudio),
   getChecklists: () => http('GET', '/checklists'),
   saveChecklist: (cl) => http('POST', '/checklists', cl),
   activateChecklist: (id) => http('POST', `/checklists/${enc(id)}/activate`),
@@ -52,6 +53,7 @@ const remote = {
   compareChecklists: (from, to) => http('GET', `/checklists/compare${qs({ from, to })}`),
   listEvaluationHistory: () => http('GET', `/evaluations/history${qs({ group_id: activeGroup })}`),
   getEvaluationCost: () => http('GET', '/evaluations/cost'),
+  exportResults: (options) => http('GET', `/results/export${qs(options)}`),
 };
 
 const KEY = 'cqa.mock.v1';
