@@ -3,6 +3,7 @@
 
 import { calculate, round2 } from './scoring.js';
 import { html } from './html.js';
+import { icon } from './icons.js';
 
 export const LANG = { RU: 'Русский', KZ: 'Қазақша', EN: 'English' };
 export const CHANNEL = { 'agent chat': 'Чат', 'voice call': 'Звонок' };
@@ -61,31 +62,34 @@ export function answerText(c, a) {
   return a === 'yes' ? 'Да' : a === 'no' ? 'Нет' : String(a);
 }
 
-/** Цвет + значок (смысл не передаётся только цветом). */
+/** Цвет + иконка + текст (смысл не передаётся только цветом). */
 export function answerTone(c, a) {
-  if (!c || a === undefined || a === null) return { cls: 'ne', icon: '?' };
-  if (a === 'na') return { cls: 'ne', icon: '–' };
-  if (c.is_flag) return a === 'yes' ? { cls: 'rd', icon: '⚠' } : { cls: 'ok', icon: '✓' };
+  if (!c || a === undefined || a === null) return { cls: 'ne', icon: 'help' };
+  if (a === 'na') return { cls: 'ne', icon: 'minus' };
+  if (c.is_flag) return a === 'yes' ? { cls: 'rd', icon: 'alert' } : { cls: 'ok', icon: 'check' };
   const f = c.type === 'scale' ? (maxStep(c) ? a / maxStep(c) : 0) : a === 'yes' ? 1 : 0;
-  if (f >= 0.75) return { cls: 'ok', icon: '✓' };
-  if (f >= 0.4) return { cls: 'wn', icon: '◐' };
-  return { cls: 'rd', icon: '✕' };
+  if (f >= 0.75) return { cls: 'ok', icon: 'check' };
+  if (f >= 0.4) return { cls: 'wn', icon: 'half' };
+  return { cls: 'rd', icon: 'x' };
 }
 
 export function answerBadge(c, a) {
   const t = answerTone(c, a);
-  return html`<span class="b ${t.cls}"><span aria-hidden="true">${t.icon}</span> ${answerText(c, a)}</span>`;
+  return html`<span class="b ${t.cls}">${icon(t.icon)}<span>${answerText(c, a)}</span></span>`;
 }
 
 export function scoreTone(v) {
   if (v === null || v === undefined) return 'ne';
   return v >= 80 ? 'ok' : v >= 60 ? 'wn' : 'rd';
 }
+export const TONE_LABEL = { ok: 'хорошо', wn: 'частично', rd: 'низко', ne: 'нет данных' };
+export const TONE_ICON = { ok: 'check', wn: 'half', rd: 'x', ne: 'minus' };
 export const fmtScore = (v) => (v === null || v === undefined ? '—' : String(round2(v)));
 export const fmtPts = (v) => (Math.round(v * 100) / 100).toFixed(2);
 
 export function scoreBadge(v) {
-  return html`<span class="b ${scoreTone(v)}">${fmtScore(v)}</span>`;
+  const t = scoreTone(v);
+  return html`<span class="b ${t}">${icon(TONE_ICON[t])}<span>${fmtScore(v)}</span></span>`;
 }
 
 export const STATUS = {

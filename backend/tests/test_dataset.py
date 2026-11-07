@@ -35,7 +35,7 @@ def test_fetch_65_and_read_after_restart(proxy):
     assert response.status_code == 200
     assert response.json()["records"] == records
     assert "group_id=DEV" in calls[0]
-    assert json.loads(settings.dataset_file.read_text())["records"] == records
+    assert json.loads(settings.dataset_file.read_text(encoding="utf-8"))["records"] == records
     assert client.get("/api/dialogues").json() == records
     with TestClient(create_app(settings)) as restarted:
         assert restarted.get("/api/dialogues").json() == records
