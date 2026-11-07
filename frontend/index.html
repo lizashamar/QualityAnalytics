@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CQA · Оценка качества диалогов</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/app.css">
+  <!--
+    Настройка (необязательно), до подключения app.js:
+    <script>window.CQA_CONFIG = { API_BASE: 'https://host/api', GROUP_ID: 'group-1', USE_MOCK: false };</script>
+    Или через адрес: index.html?api=https://host/api&group=group-1  (?mock=1 — принудительно демо-режим)
+  -->
+</head>
+<body>
+  <button type="button" class="skip" data-action="skip">Перейти к содержимому</button>
+  <nav id="nav" aria-label="Разделы"></nav>
+  <main id="main" tabindex="-1"></main>
+  <dialog id="modal" aria-modal="true"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
