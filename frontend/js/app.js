@@ -6,6 +6,8 @@ import { store } from './store.js';
 import { html } from './html.js';
 import { loadAll, ensureEvaluation } from './actions.js';
 import { activeChecklist } from './results.js';
+import { icon } from './icons.js';
+import { skeleton, emptyState } from './components/ui.js';
 import * as overview from './components/overview.js';
 import * as list from './components/conversations-list.js';
 import * as card from './components/conversation-card.js';
@@ -91,31 +93,39 @@ window.addEventListener('hashchange', onRoute);
 
 // ---------- отрисовка ----------
 const NAV = [
-  ['overview', '#/overview', 'Обзор'],
-  ['conversations', '#/conversations', 'Диалоги'],
-  ['appeals', '#/appeals', 'Апелляции'],
-  ['checklists', '#/checklists', 'Чек-листы'],
+  ['conversations', '#/conversations', 'Диалоги', 'chat'],
+  ['appeals', '#/appeals', 'Апелляции', 'scale'],
+  ['checklists', '#/checklists', 'Чек-лист', 'doc'],
+  ['overview', '#/overview', 'Обзор', 'sparkle'],
 ];
 const NAV_OF = { conversation: 'conversations', review: 'appeals', editor: 'checklists' };
 const THEME_LABEL = { auto: 'Тема: как в системе', light: 'Тема: светлая', dark: 'Тема: тёмная' };
+const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
 
 function navView(s) {
   const cur = NAV_OF[s.route.name] || s.route.name;
   const pending = s.appeals.filter((a) => a.status === 'pending').length;
   return html`
-    <div class="brand"><i aria-hidden="true"></i><span>CQA</span></div>
-    <ul>${NAV.map(([k, href, label]) => html`<li><a href="${href}" ${k === cur ? html`aria-current="page" class="on"` : ''}>
-      <span>${label}</span>${k === 'appeals' && pending ? html`<span class="b wn" aria-label="${pending} на рассмотрении">${pending}</span>` : ''}</a></li>`)}</ul>
-    <div class="nav-foot">
-      <span class="b ${config.USE_MOCK ? 'wn' : 'ok'}" title="${config.USE_MOCK ? 'Данные симулируются в браузере' : config.API_BASE}">${config.USE_MOCK ? 'Демо-режим (mock)' : 'API подключён'}</span>
-      <button type="button" class="link" data-action="theme">${THEME_LABEL[s.theme]}</button>
-    </div>`;
+    <div class="hdr-top">
+      <div class="brand"><b>CQA · Анализ качества диалогов</b><span>Freedom Broker × NU Data Challenge</span></div>
+      <div class="hdr-tools">
+        <span class="b ${config.USE_MOCK ? 'wn' : 'ok'} mode" title="${config.USE_MOCK ? 'Данные симулируются в браузере' : config.API_BASE}">${icon(config.USE_MOCK ? 'info' : 'check')}<span>${config.USE_MOCK ? 'Демо-режим (mock)' : 'API подключён'}</span></span>
+        <button type="button" class="icon-btn theme" data-action="theme" aria-label="${THEME_LABEL[s.theme]}. Переключить тему" title="${THEME_LABEL[s.theme]}">${icon(THEME_ICON[s.theme])}</button>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Разделы"><ul>${NAV.map(([k, href, label, ic]) => html`<li><a href="${href}" ${k === cur ? html`aria-current="page" class="on"` : ''}>
+      ${icon(ic)}<span>${label}</span>${k === 'appeals' && pending ? html`<span class="count" aria-label="${pending} на рассмотрении">${pending}</span>` : ''}</a></li>`)}</ul></nav>`;
+}
+
+function loadingView() {
+  return html`<div aria-busy="true" aria-label="Загрузка"><div class="page-head"><div><span class="sk-title"></span></div></div>
+    <div class="conv-list">${[1, 2, 3, 4].map(() => html`<div class="card">${skeleton(3)}</div>`)}</div></div>`;
 }
 
 function mainView(s) {
-  if (!s.ready) return html`<p class="mu" aria-busy="true">Загрузка…</p>`;
-  if (s.error) return html`<section class="card"><h2>Не удалось загрузить данные</h2><p class="err">${s.error}</p>
-    <p class="mu">API: ${config.API_BASE || '(не задан)'}</p><button type="button" class="p" data-action="retry">Повторить</button></section>`;
+  if (!s.ready) return loadingView();
+  if (s.error) return html`<section class="card">${emptyState('alert', 'Не удалось загрузить данные', s.error,
+    html`<p class="hint">API: ${config.API_BASE || '(не задан)'}</p><button type="button" class="p" data-action="retry">${icon('refresh')}Повторить</button>`)}</section>`;
   switch (s.route.name) {
     case 'overview': return overview.view(s);
     case 'conversation': return card.view(s);
@@ -134,6 +144,7 @@ function modalView(s, m) {
   return html``;
 }
 
+const $root = document.getElementById('app');
 const $nav = document.getElementById('nav');
 const $main = document.getElementById('main');
 const $dialog = document.getElementById('modal');
@@ -159,8 +170,8 @@ function restoreFocus(f) {
 
 function render(s) {
   const focus = captureFocus();
-  const root = document.documentElement;
-  if (s.theme === 'auto') delete root.dataset.theme; else root.dataset.theme = s.theme;
+  // Тема ставится на корень компонента (.cqa-app), а не на документ — не трогаем страницу-хост в D365.
+  if (s.theme === 'auto') delete $root.dataset.theme; else $root.dataset.theme = s.theme;
 
   $nav.innerHTML = String(navView(s));
   // Элементы с data-keep (аудиоплеер) переживают перерисовку: позиция и воспроизведение не сбрасываются.

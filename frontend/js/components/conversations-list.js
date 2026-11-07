@@ -1,12 +1,15 @@
 // Список диалогов: поиск, фильтры (язык, канал, статус), итог и флаг грубого нарушения.
 
 import { html, attr } from '../html.js';
+import { icon } from '../icons.js';
 import { store } from '../store.js';
 import {
-  LANG, CHANNEL, STATUS, latestEvaluation, finalResult, conversationStatus, scoreBadge, checklistById,
+  LANG, CHANNEL, STATUS, latestEvaluation, finalResult, conversationStatus, checklistById, fmtScore,
 } from '../results.js';
+import { scoreRing, emptyState } from './ui.js';
 
 const STATUS_TONE = { none: 'ne', evaluated: 'ok', appeal: 'wn', reviewed: 'ac' };
+const STATUS_ICON = { none: 'circle', evaluated: 'check', appeal: 'clock', reviewed: 'scale' };
 
 export function rowsFor(s) {
   return s.conversations.map((conv) => {
@@ -27,6 +30,41 @@ function matches(f, r) {
   return c.conversation_id.toLowerCase().includes(q) || c.transcript.some((t) => String(t.text).toLowerCase().includes(q));
 }
 
+function preview(conv) {
+  const first = conv.transcript.find((t) => t.speaker === 'client') || conv.transcript[0];
+  if (!first) return '';
+  const t = String(first.text);
+  return t.length > 110 ? t.slice(0, 110) + '…' : t;
+}
+
+function cardView(s, r) {
+  const c = r.conv;
+  const cl = r.ev ? checklistById(s, r.ev.checklist_id) : null;
+  const isCall = c.channel === 'voice call';
+  const flag = r.R && r.R.final.gross_flag;
+  return html`<li class="conv${flag ? ' has-flag' : ''}" data-action="open-conv" data-id="${c.conversation_id}">
+    <div class="conv-main">
+      <div class="conv-top">
+        <span class="conv-ch ${isCall ? 'call' : ''}" title="${CHANNEL[c.channel] || c.channel}">${icon(isCall ? 'phone' : 'chat')}</span>
+        <a class="conv-id" href="#/conversations/${encodeURIComponent(c.conversation_id)}">${c.conversation_id}</a>
+      </div>
+      <p class="conv-preview">${preview(c)}</p>
+      <div class="badges">
+        <span class="b ne">${c.language}</span>
+        <span class="b ne">${CHANNEL[c.channel] || c.channel}</span>
+        <span class="b ${STATUS_TONE[r.status]}">${icon(STATUS_ICON[r.status])}<span>${STATUS[r.status]}</span></span>
+        ${flag ? html`<span class="b rd">${icon('flag')}<span>Грубое нарушение</span></span>` : ''}
+        ${cl ? html`<span class="hint">v${cl.version} · ${c.transcript.length} реплик</span>` : html`<span class="hint">${c.transcript.length} реплик</span>`}
+      </div>
+    </div>
+    <div class="conv-score">
+      ${r.R ? html`${scoreRing(r.R.final.total, { key: r.ev.id, size: 'sm', label: `Итог ${c.conversation_id}` })}
+        ${r.R.changed ? html`<span class="hint was" title="Исходная оценка">было ${fmtScore(r.ev.total)}</span>` : ''}`
+        : html`<span class="ring-empty" aria-label="Не оценён">—</span>`}
+    </div>
+  </li>`;
+}
+
 export function view(s) {
   const f = s.filters;
   const all = rowsFor(s);
@@ -34,45 +72,27 @@ export function view(s) {
   const langs = [...new Set(s.conversations.map((c) => c.language))];
   const channels = [...new Set(s.conversations.map((c) => c.channel))];
   const opt = (v, label, cur) => html`<option value="${v}" ${attr('selected', v === cur)}>${label}</option>`;
+  const filtered = f.q || f.language || f.channel || f.status;
 
   return html`
-    <h2>Диалоги</h2>
-    <p class="sub">Откройте диалог, чтобы увидеть оценку, доказательства и оспорить результат.</p>
-    <div class="row filters" role="search">
-      <label class="sr" for="f-q">Поиск</label>
-      <input id="f-q" type="search" placeholder="Поиск по ID и тексту реплик" value="${f.q}" data-input="filter" data-key="q">
+    <div class="page-head"><div><h2>Диалоги</h2>
+      <p class="sub">Откройте диалог, чтобы увидеть оценку, доказательства и оспорить результат.</p></div></div>
+    <div class="filters card" role="search">
+      <div class="search">${icon('search')}<label class="sr" for="f-q">Поиск</label>
+        <input id="f-q" type="search" placeholder="Поиск по ID и тексту реплик" value="${f.q}" data-input="filter" data-key="q"></div>
       <label class="sr" for="f-lang">Язык</label>
       <select id="f-lang" data-change="filter" data-key="language">${opt('', 'Все языки', f.language)}${langs.map((l) => opt(l, `${LANG[l] || l} (${l})`, f.language))}</select>
       <label class="sr" for="f-ch">Канал</label>
       <select id="f-ch" data-change="filter" data-key="channel">${opt('', 'Чаты и звонки', f.channel)}${channels.map((c) => opt(c, CHANNEL[c] || c, f.channel))}</select>
       <label class="sr" for="f-st">Статус оценки</label>
       <select id="f-st" data-change="filter" data-key="status">${opt('', 'Любой статус', f.status)}${Object.entries(STATUS).map(([k, v]) => opt(k, v, f.status))}${opt('flag', 'С грубым нарушением', f.status)}</select>
-      ${f.q || f.language || f.channel || f.status ? html`<button type="button" data-action="filter-reset">Сбросить</button>` : ''}
+      ${filtered ? html`<button type="button" class="ghost" data-action="filter-reset">${icon('x')}Сбросить</button>` : ''}
     </div>
-    <p class="mu small" aria-live="polite">Показано ${rows.length} из ${all.length}</p>
-    <div class="card tw">
-      <table>
-        <caption class="sr">Список диалогов</caption>
-        <thead><tr><th scope="col">ID</th><th scope="col">Язык</th><th scope="col">Канал</th><th scope="col">Реплик</th>
-          <th scope="col">Статус</th><th scope="col">Итог</th><th scope="col">Грубое нарушение</th><th scope="col">Чек-лист</th></tr></thead>
-        <tbody>
-        ${rows.map((r) => {
-          const cl = r.ev ? checklistById(s, r.ev.checklist_id) : null;
-          return html`<tr class="c" data-action="open-conv" data-id="${r.conv.conversation_id}">
-            <td><a href="#/conversations/${encodeURIComponent(r.conv.conversation_id)}"><b>${r.conv.conversation_id}</b></a></td>
-            <td>${r.conv.language}</td>
-            <td>${CHANNEL[r.conv.channel] || r.conv.channel}</td>
-            <td>${r.conv.transcript.length}</td>
-            <td><span class="b ${STATUS_TONE[r.status]}">${STATUS[r.status]}</span></td>
-            <td>${r.R ? html`${scoreBadge(r.R.final.total)}${r.R.changed ? html` <span class="mu small" title="Исходная оценка">было ${r.ev.total ?? '—'}</span>` : ''}` : '—'}</td>
-            <td>${r.R ? (r.R.final.gross_flag ? html`<span class="b rd">⚠ Выявлено</span>` : html`<span class="mu">не выявлено</span>`) : ''}</td>
-            <td class="mu small">${cl ? `v${cl.version}` : ''}</td>
-          </tr>`;
-        })}
-        ${rows.length ? '' : html`<tr><td colspan="8" class="mu">Нет диалогов под эти фильтры.</td></tr>`}
-        </tbody>
-      </table>
-    </div>`;
+    <p class="hint" aria-live="polite">Показано ${rows.length} из ${all.length}</p>
+    ${rows.length
+      ? html`<ul class="conv-list" aria-label="Список диалогов">${rows.map((r) => cardView(s, r))}</ul>`
+      : html`<div class="card">${emptyState('search', 'Ничего не найдено', 'Нет диалогов под эти фильтры.',
+          filtered ? html`<button type="button" data-action="filter-reset">Сбросить фильтры</button>` : '')}</div>`}`;
 }
 
 export const handlers = {
