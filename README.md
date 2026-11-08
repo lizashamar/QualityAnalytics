@@ -1,4 +1,4 @@
-# Conversation Quality Analytics
+# Conversation Quality Analytics | Team: kudafest
 
 FastAPI + SQLite with a vanilla JavaScript interface for evaluating RU, KZ and EN support chats
 and call transcripts. The prototype does not require login or a frontend build step.
